@@ -1,0 +1,170 @@
+import { useState } from 'react';
+import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom';
+import {
+  Home, LayoutGrid, Handshake, Users, Newspaper, MessageCircle, Search,
+  User, Bell, Settings, Info, LifeBuoy, Plus, Moon, Sun, Bookmark, Radio, Menu, X, LogOut,
+} from 'lucide-react';
+import { Logo, Avatar } from './ui';
+import { useStore } from '../store/store';
+import { NOTIFICATIONS } from '../data/demo';
+
+const NAV_MAIN = [
+  { to: '/home', label: 'Home', icon: Home },
+  { to: '/gighub', label: 'Gighub', icon: LayoutGrid },
+  { to: '/collab', label: 'Collab', icon: Handshake },
+  { to: '/community', label: 'Community', icon: Users },
+  { to: '/news', label: 'News', icon: Newspaper },
+  { to: '/live', label: 'Live', icon: Radio },
+  { to: '/messages', label: 'Messages', icon: MessageCircle, badge: true },
+  { to: '/saved', label: 'Saved', icon: Bookmark },
+];
+const NAV_YOU = [
+  { to: '/profile/meera', label: 'Profile', icon: User },
+  { to: '/notifications', label: 'Notifications', icon: Bell },
+  { to: '/search', label: 'Search', icon: Search },
+];
+const NAV_MORE = [
+  { to: '/settings', label: 'Settings', icon: Settings },
+  { to: '/about', label: 'About Strings', icon: Info },
+  { to: '/support', label: 'Help & Legal', icon: LifeBuoy },
+];
+
+function NavGroup({ label, items, onNav }) {
+  return (
+    <nav className="nav-group">
+      {label && <div className="nav-group-label">{label}</div>}
+      {items.map((it) => (
+        <NavLink key={it.to} to={it.to} onClick={onNav} className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+          <it.icon size={17} strokeWidth={1.9} />
+          {it.label}
+          {it.badge && <span className="nav-badge">2</span>}
+        </NavLink>
+      ))}
+    </nav>
+  );
+}
+
+export default function Shell({ onOpenPalette, onNewPost, onNewOpp }) {
+  const { user, logout, theme, toggleTheme, readNotifs } = useStore();
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [drawer, setDrawer] = useState(false);
+  const navigate = useNavigate();
+  const unread = NOTIFICATIONS.filter((n) => !readNotifs.includes(n.id)).length;
+
+  const sidebarBody = (onNav) => (
+    <>
+      <Link to="/home" className="logo" onClick={onNav} style={{ textDecoration: 'none' }}>
+        <Logo light size={24} />
+      </Link>
+      <div className="nav-group-label" style={{ padding: '0 12px 10px', textTransform: 'none', letterSpacing: 0, fontSize: 11 }}>
+        Tying the music industry together
+      </div>
+      <NavGroup items={NAV_MAIN} onNav={onNav} />
+      <NavGroup label="You" items={NAV_YOU} onNav={onNav} />
+      <NavGroup label="More" items={NAV_MORE} onNav={onNav} />
+      <div className="sidebar-foot">
+        <button className="mini-profile" onClick={() => { onNav?.(); navigate('/profile/meera'); }}>
+          <Avatar name={user?.name || 'Guest'} size={34} />
+          <div style={{ flex: 1 }}>
+            <b>{user?.name || 'Guest'}</b>
+            <span>{user ? `${user.role} · ${user.city}` : 'Demo mode'}</span>
+          </div>
+        </button>
+        <button className="nav-item" onClick={() => { logout(); navigate('/'); }} style={{ marginTop: 4 }}>
+          <LogOut size={17} strokeWidth={1.9} /> Log out
+        </button>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="shell">
+      <aside className="sidebar">{sidebarBody()}</aside>
+
+      {/* mobile drawer */}
+      {drawer && (
+        <div className="modal-backdrop" style={{ justifyContent: 'flex-start', padding: 0 }} onClick={() => setDrawer(false)}>
+          <div className="sidebar" style={{ display: 'flex', height: '100vh', animation: 'popIn .2s' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+              <button className="icon-btn" onClick={() => setDrawer(false)} style={{ background: 'rgba(255,255,255,.08)', borderColor: 'rgba(255,255,255,.15)', color: '#fff' }}>
+                <X size={16} />
+              </button>
+            </div>
+            {sidebarBody(() => setDrawer(false))}
+          </div>
+        </div>
+      )}
+
+      <div className="main-col">
+        <header className="topbar">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+            <button className="icon-btn mobile-menu-btn" onClick={() => setDrawer(true)} aria-label="Open menu">
+              <Menu size={17} />
+            </button>
+            <button className="topbar-search" onClick={onOpenPalette} aria-label="Search Strings">
+              <Search size={15} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Search people, venues, opportunities…</span>
+              <kbd>⌘K</kbd>
+            </button>
+          </div>
+          <div className="topbar-actions">
+            <button className="icon-btn" onClick={toggleTheme} aria-label="Toggle dark mode" title="Toggle dark mode">
+              {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+            </button>
+            <button className="icon-btn" onClick={onNewPost} aria-label="Create a post" title="Create a post">
+              <Plus size={17} />
+            </button>
+            <button className="icon-btn" onClick={(e) => { e.stopPropagation(); setNotifOpen((o) => !o); }} aria-label="Notifications">
+              <Bell size={16} />
+              {unread > 0 && <span className="dot-badge" />}
+            </button>
+            {notifOpen && (
+              <div className="panel-drop" style={{ position: 'absolute', top: 48, right: 0, width: 340, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, boxShadow: 'var(--shadow-pop)', zIndex: 60, overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+                <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', fontWeight: 600, fontSize: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  Notifications
+                  <button className="btn btn-ghost btn-xs" onClick={() => { setNotifOpen(false); navigate('/notifications'); }}>See all</button>
+                </div>
+                <div style={{ maxHeight: 340, overflowY: 'auto' }}>
+                  {NOTIFICATIONS.slice(0, 4).map((n) => (
+                    <div key={n.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-soft)', fontSize: 13, display: 'flex', gap: 10 }}>
+                      {!readNotifs.includes(n.id) && <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--blue)', marginTop: 6, flexShrink: 0 }} />}
+                      <div>
+                        <div dangerouslySetInnerHTML={{ __html: n.text }} />
+                        <span style={{ color: 'var(--text-faint)', fontSize: 11.5 }}>{n.time}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <button className="icon-btn" onClick={() => navigate('/profile/meera')} aria-label="Your profile" style={{ overflow: 'hidden', padding: 0 }}>
+              <Avatar name={user?.name || 'G'} size={38} />
+            </button>
+          </div>
+        </header>
+
+        <main className="content-area">
+          <div className="content-inner wide">
+            <Outlet context={{ openPost: onNewPost, openOpp: onNewOpp }} />
+          </div>
+        </main>
+
+        <nav className="bottom-nav">
+          {[
+            { to: '/home', label: 'Home', icon: Home },
+            { to: '/gighub', label: 'Gighub', icon: LayoutGrid },
+            { to: '/collab', label: 'Collab', icon: Handshake },
+            { to: '/news', label: 'News', icon: Newspaper },
+            { to: '/messages', label: 'Messages', icon: MessageCircle },
+          ].map((it) => (
+            <NavLink key={it.to} to={it.to} className={({ isActive }) => (isActive ? 'active' : '')}>
+              <it.icon size={20} strokeWidth={1.9} />
+              {it.label}
+              {it.to === '/messages' && <span className="nav-badge">2</span>}
+            </NavLink>
+          ))}
+        </nav>
+      </div>
+    </div>
+  );
+}

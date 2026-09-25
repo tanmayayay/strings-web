@@ -1,0 +1,360 @@
+/* ============================================================
+   STRINGS — auth / onboarding styles
+   Split-screen onboarding. Uses theme.css vars so dark mode works.
+   Global reduced-motion rule in theme.css flattens the keyframes below.
+   ============================================================ */
+
+.onb-root{
+  min-height:100vh;
+  display:flex;
+  background:var(--bg);
+  color:var(--text);
+}
+
+/* ---------- Brand panel (desktop left, 40%) ---------- */
+.onb-brand{
+  position:relative;
+  width:40%;
+  flex-shrink:0;
+  overflow:hidden;
+  color:#fff;
+  background:linear-gradient(160deg,#0A1630 0%,#123B82 42%,#23328f 68%,#4F46E5 100%);
+  display:flex;
+}
+.onb-brand-inner{
+  position:relative;
+  z-index:2;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  gap:32px;
+  width:100%;
+  padding:44px 44px 0;
+}
+.onb-brand-top{display:flex; align-items:center; justify-content:space-between;}
+
+/* Glow orbs */
+.onb-orb{
+  position:absolute;
+  border-radius:50%;
+  filter:blur(80px);
+  pointer-events:none;
+  z-index:1;
+  animation:onb-drift 16s ease-in-out infinite alternate;
+}
+.onb-orb-1{width:340px; height:340px; left:-110px; top:-90px; background:radial-gradient(circle,rgba(14,165,233,.55),transparent 70%);}
+.onb-orb-2{width:300px; height:300px; right:-90px; top:34%; background:radial-gradient(circle,rgba(79,70,229,.6),transparent 70%); animation-duration:20s; animation-delay:-6s;}
+.onb-orb-3{width:260px; height:260px; left:24%; bottom:-110px; background:radial-gradient(circle,rgba(42,99,238,.55),transparent 70%); animation-duration:13s; animation-delay:-3s;}
+@keyframes onb-drift{
+  from{transform:translate(0,0) scale(1);}
+  to{transform:translate(46px,-34px) scale(1.14);}
+}
+
+/* Headline + pitch */
+.onb-brand h1{
+  font-family:var(--font-display);
+  font-size:clamp(26px,2.6vw,38px);
+  line-height:1.15;
+  letter-spacing:-.5px;
+  margin:0 0 14px;
+  color:#fff;
+}
+.onb-brand-pitch{
+  font-size:15px;
+  line-height:1.6;
+  color:rgba(255,255,255,.78);
+  max-width:34ch;
+  margin:0;
+}
+
+/* Testimonials */
+.onb-quote{
+  margin-top:30px;
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:var(--radius-m);
+  padding:20px 22px 16px;
+  backdrop-filter:blur(6px);
+  min-height:172px;
+  display:flex;
+  flex-direction:column;
+}
+.onb-quote blockquote{margin:0; flex:1;}
+.onb-quote p{
+  font-size:14.5px;
+  line-height:1.65;
+  color:rgba(255,255,255,.92);
+  margin:0 0 12px;
+}
+.onb-quote footer{
+  font-size:12.5px;
+  font-weight:600;
+  color:rgba(255,255,255,.65);
+  letter-spacing:.2px;
+}
+.onb-quote-dots{display:flex; gap:8px; margin-top:14px;}
+.onb-quote-dots button{
+  width:22px; height:4px;
+  border:0; border-radius:99px;
+  background:rgba(255,255,255,.25);
+  cursor:pointer;
+  padding:0;
+  transition:background .25s;
+}
+.onb-quote-dots button.on{background:#fff;}
+
+/* Stats */
+.onb-stats{
+  display:flex;
+  gap:28px;
+  padding:26px 0 8px;
+  border-top:1px solid rgba(255,255,255,.14);
+}
+.onb-stat b{
+  display:block;
+  font-family:var(--font-display);
+  font-size:22px;
+  color:#fff;
+  letter-spacing:-.3px;
+}
+.onb-stat span{
+  font-size:12px;
+  color:rgba(255,255,255,.62);
+  font-weight:500;
+}
+
+/* Waveform motif */
+.onb-wave{display:block; width:100%; height:110px; margin-top:6px;}
+
+/* Equalizer bars */
+.onb-eq{
+  display:flex;
+  align-items:flex-end;
+  gap:5px;
+  height:64px;
+  margin-top:2px;
+  opacity:.9;
+}
+.onb-eq i{
+  flex:1;
+  border-radius:3px;
+  background:linear-gradient(180deg,rgba(14,165,233,.9),rgba(79,70,229,.55));
+  transform-origin:bottom;
+  animation:onb-eq 2.2s ease-in-out infinite;
+}
+@keyframes onb-eq{
+  0%,100%{transform:scaleY(.55);}
+  50%{transform:scaleY(1);}
+}
+
+/* ---------- Mobile slim header (hidden on desktop) ---------- */
+.onb-mobile-head{
+  display:none;
+  align-items:center;
+  gap:14px;
+  padding:16px 20px;
+  background:linear-gradient(92deg,#123B82 0%,#2A63EE 60%,#0EA5E9 100%);
+  color:#fff;
+}
+.onb-mobile-head p{
+  margin:0;
+  font-size:13px;
+  font-weight:500;
+  color:rgba(255,255,255,.85);
+  line-height:1.45;
+}
+
+/* ---------- Form pane (right, 60%) ---------- */
+.onb-form{
+  flex:1;
+  min-width:0;
+  display:flex;
+  background:var(--bg);
+}
+.onb-form-inner{
+  width:100%;
+  max-width:600px;
+  margin:0 auto;
+  padding:40px 36px 44px;
+  display:flex;
+  flex-direction:column;
+}
+.onb-form-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:26px;
+}
+.onb-step-label{
+  font-size:12.5px;
+  font-weight:600;
+  color:var(--text-faint);
+  letter-spacing:.3px;
+}
+
+/* Animated progress segments */
+.onb-progress{display:flex; gap:8px; margin-bottom:30px;}
+.onb-seg{
+  flex:1;
+  height:6px;
+  border-radius:99px;
+  background:var(--border-soft);
+  overflow:hidden;
+}
+.onb-seg-fill{
+  height:100%;
+  width:0%;
+  border-radius:99px;
+  background:var(--gradient-brand);
+}
+
+/* Step heading */
+.onb-title{
+  font-family:var(--font-display);
+  font-size:24px;
+  letter-spacing:-.4px;
+  margin:0 0 8px;
+}
+.onb-sub{
+  font-size:13.5px;
+  line-height:1.6;
+  color:var(--text-dim);
+  margin:0;
+}
+.onb-step-body{min-height:340px;}
+
+/* Step 1 — stakeholder type cards */
+.onb-type-grid{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:12px;
+  margin-top:18px;
+}
+.onb-type-card{
+  position:relative;
+  text-align:left;
+  background:var(--panel);
+  border:1.5px solid var(--border);
+  border-radius:var(--radius-m);
+  padding:18px 16px;
+  cursor:pointer;
+  transition:border-color .18s ease, background-color .18s ease, box-shadow .18s ease, transform .12s ease;
+  font-family:inherit;
+  color:inherit;
+}
+.onb-type-card:hover{border-color:var(--blue); box-shadow:var(--shadow-hover);}
+.onb-type-card:active{transform:scale(.985);}
+.onb-type-card.selected{background:var(--blue-dim); border-color:var(--blue);}
+.onb-type-ring{
+  position:absolute;
+  inset:-1.5px;
+  border:2px solid var(--blue);
+  border-radius:var(--radius-m);
+  pointer-events:none;
+}
+.onb-type-ico{
+  width:42px; height:42px;
+  border-radius:12px;
+  background:var(--panel-2);
+  color:var(--blue);
+  display:flex; align-items:center; justify-content:center;
+  margin-bottom:12px;
+  transition:background-color .18s ease, color .18s ease;
+}
+.onb-type-card.selected .onb-type-ico{background:var(--blue); color:#fff;}
+.onb-type-card b{display:block; font-size:14.5px; margin-bottom:4px;}
+.onb-type-card span{display:block; font-size:12.5px; line-height:1.5; color:var(--text-dim);}
+
+/* Step 2 — profile fields */
+.onb-fields{margin-top:18px;}
+.onb-field-row{display:flex; gap:12px;}
+.onb-field-row > .field{flex:1; min-width:0;}
+
+/* Step 3 — interest chips */
+.onb-chips{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:16px;
+}
+.onb-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  padding:10px 16px;
+  border-radius:999px;
+  border:1.5px solid var(--border);
+  background:var(--panel);
+  font-family:inherit;
+  font-size:13.5px;
+  font-weight:600;
+  color:var(--text-dim);
+  cursor:pointer;
+  transition:background-color .16s ease, border-color .16s ease, color .16s ease;
+}
+.onb-chip:hover{border-color:var(--blue); color:var(--blue);}
+.onb-chip.on{background:var(--blue); border-color:var(--blue); color:#fff;}
+.onb-chip.on:hover{color:#fff;}
+.onb-chip svg{flex-shrink:0;}
+
+/* "What happens next" summary card */
+.onb-next{
+  margin-top:26px;
+  background:var(--panel-2);
+  border:1px solid var(--border-soft);
+  border-radius:var(--radius-m);
+  padding:20px 20px 8px;
+}
+.onb-next h3{
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:.4px;
+  text-transform:uppercase;
+  color:var(--text-dim);
+  margin:0 0 14px;
+}
+.onb-next-step{display:flex; gap:14px; padding-bottom:14px;}
+.onb-next-step:last-child{padding-bottom:12px;}
+.onb-next-num{
+  width:26px; height:26px;
+  flex-shrink:0;
+  border-radius:50%;
+  background:var(--blue);
+  color:#fff;
+  font-size:13px;
+  font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+  margin-top:1px;
+}
+.onb-next-step b{display:block; font-size:14px; margin-bottom:3px;}
+.onb-next-step p{margin:0; font-size:12.5px; line-height:1.55; color:var(--text-dim);}
+
+/* Actions */
+.onb-actions{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-top:30px;
+  padding-top:22px;
+  border-top:1px solid var(--border-soft);
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width:1100px){
+  .onb-brand-inner{padding:36px 30px 0;}
+  .onb-stats{gap:20px;}
+}
+@media (max-width:880px){
+  .onb-root{flex-direction:column;}
+  .onb-brand{display:none;}
+  .onb-mobile-head{display:flex;}
+  .onb-form-top .onb-logo-link{display:none;}
+  .onb-form-inner{padding:28px 20px 40px;}
+  .onb-step-body{min-height:0;}
+  .onb-type-grid{grid-template-columns:1fr 1fr;}
+}
+@media (max-width:460px){
+  .onb-field-row{flex-direction:column; gap:0;}
+  .onb-type-grid{gap:10px;}
+  .onb-type-card{padding:14px 12px;}
+}
