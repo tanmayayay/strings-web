@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search as SearchIcon, MapPin } from 'lucide-react';
+import { Search as SearchIcon, MapPin, ExternalLink } from 'lucide-react';
 import { PageHead, Avatar, Tag, Verified, EmptyState } from '../components/ui';
 import { MatchScore } from '../components/widgets';
 import { PEOPLE, OPPORTUNITIES, CITIES } from '../data/demo';
+import { liveVenues, viaLabel } from '../data/liveData';
 import { useStore } from '../store/store';
 
 export default function Search() {
@@ -22,6 +23,10 @@ export default function Search() {
   const opps = OPPORTUNITIES.filter((o) =>
     (city === 'all' || o.city === city) && (type === 'all' || o.type === type) &&
     (!ql || (o.title + o.desc + o.city).toLowerCase().includes(ql))
+  );
+  const venues = liveVenues.filter((v) =>
+    (city === 'all' || (v.city || '') === city) &&
+    (!ql || ((v.name || '') + ' ' + (v.city || '') + ' ' + (v.type || '')).toLowerCase().includes(ql))
   );
 
   return (
@@ -56,6 +61,32 @@ export default function Search() {
                 <span>{p.role} · <MapPin size={10} style={{ verticalAlign: -1 }} /> {p.city}</span>
               </div>
               <Tag color="sky">{p.type}</Tag>
+            </div>
+          ))}
+        </>
+      )}
+
+      {liveVenues.length > 0 && (tab === 'all' || tab === 'people') && (
+        <>
+          <h4 style={{ fontSize: 13, color: 'var(--text-dim)', margin: '22px 0 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            Real venues <Tag color="indigo">Live data</Tag>
+            <span style={{ fontWeight: 400, color: 'var(--text-faint)' }}>({venues.length})</span>
+          </h4>
+          {venues.map((v, i) => (
+            <div className="mini-list-item card" key={v.id || `${v.name || 'venue'}-${i}`} style={{ padding: '12px 14px', marginBottom: 10, cursor: 'default' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <b>{v.name || 'Unnamed venue'}</b>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <MapPin size={10} style={{ verticalAlign: -1 }} /> {v.city || 'India'}
+                </span>
+              </div>
+              {v.type && <Tag color="sky">{v.type}</Tag>}
+              <Tag color="indigo">{viaLabel(v, 'OpenStreetMap')}</Tag>
+              {v.source_url && (
+                <a href={v.source_url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-xs" style={{ flexShrink: 0 }}>
+                  Source <ExternalLink size={12} />
+                </a>
+              )}
             </div>
           ))}
         </>

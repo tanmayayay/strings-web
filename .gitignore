@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Strings data pipeline cache
+data-pipeline/.cache/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

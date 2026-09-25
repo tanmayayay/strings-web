@@ -1,0 +1,313 @@
+// Strings — data model for the Indian music industry networking platform.
+// SQLite for zero-infra local dev. To move to Postgres: change provider to
+// "postgresql", point DATABASE_URL at the Postgres instance, and re-migrate.
+// (No SQLite-specific features are used, so the switch is mechanical.)
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum StakeholderType {
+  PERFORMER
+  VENUE
+  BUYER
+  CREW
+  INSTITUTION
+}
+
+enum Visibility {
+  PUBLIC
+  CONNECTIONS
+  PRIVATE
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+}
+
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+}
+
+enum ConnectionKind {
+  CONNECT
+  FOLLOW
+}
+
+enum PostVisibility {
+  PUBLIC
+  CONNECTIONS
+}
+
+enum OpportunityStatus {
+  OPEN
+  CLOSED
+}
+
+enum ApplicationStatus {
+  PENDING
+  SHORTLISTED
+  REJECTED
+  WITHDRAWN
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+// ---------------------------------------------------------------- User/Profile
+model User {
+  id                 String             @id @default(cuid())
+  stakeholderType    StakeholderType
+  name               String
+  bio                String?
+  city               String?
+  visibility         Visibility         @default(PUBLIC)
+  verificationStatus VerificationStatus @default(UNVERIFIED)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  detail             StakeholderDetail?
+  posts              Post[]
+  comments           Comment[]
+  likes              Like[]
+  following          Connection[]       @relation("Follower")
+  followers          Connection[]       @relation("Followee")
+  opportunities      Opportunity[]      @relation("Poster")
+  applications       Application[]      @relation("Applicant")
+  bookingsRequested  Booking[]          @relation("Requester")
+  bookingsHosted     Booking[]          @relation("Host")
+  sentMessages       Message[]          @relation("Sender")
+  conversationMemberships ConversationMember[]
+  notifications      Notification[]
+  articles           Article[]          @relation("ArticleAuthor")
+
+  @@index([stakeholderType])
+  @@index([city])
+}
+
+// Polymorphic-ish type-specific profile fields (e.g. performer genres/instruments,
+// venue capacity, buyer org). `type` mirrors StakeholderType; `data` is free-form.
+model StakeholderDetail {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type   String
+  data   Json
+}
+
+// ------------------------------------------------------------------ Social
+model Connection {
+  id         String           @id @default(cuid())
+  followerId String
+  follower   User             @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followeeId String
+  followee   User             @relation("Followee", fields: [followeeId], references: [id], onDelete: Cascade)
+  status     ConnectionStatus @default(PENDING)
+  kind       ConnectionKind   @default(FOLLOW)
+  createdAt  DateTime         @default(now())
+
+  @@unique([followerId, followeeId])
+}
+
+model Post {
+  id         String         @id @default(cuid())
+  authorId   String
+  author     User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body       String
+  mediaUrl   String?
+  visibility PostVisibility @default(PUBLIC)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  comments Comment[]
+  likes    Like[]
+
+  @@index([authorId])
+  @@index([createdAt])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([postId])
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+}
+
+// ------------------------------------------------------------- Opportunities
+model Opportunity {
+  id           String            @id @default(cuid())
+  posterId     String
+  poster       User              @relation("Poster", fields: [posterId], references: [id], onDelete: Cascade)
+  title        String
+  description  String
+  requirements Json?
+  city         String?
+  genre        String?
+  budgetMin    Int?
+  budgetMax    Int?
+  status       OpportunityStatus @default(OPEN)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  applications Application[]
+
+  @@index([status])
+  @@index([city])
+}
+
+model Application {
+  id            String            @id @default(cuid())
+  opportunityId String
+  opportunity   Opportunity       @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  applicantId   String
+  applicant     User              @relation("Applicant", fields: [applicantId], references: [id], onDelete: Cascade)
+  status        ApplicationStatus @default(PENDING)
+  message       String?
+  createdAt     DateTime          @default(now())
+
+  @@unique([opportunityId, applicantId])
+}
+
+// --------------------------------------------------------------- Publishing
+model Article {
+  id          String    @id @default(cuid())
+  title       String
+  body        String
+  excerpt     String?
+  category    String?
+  publishedAt DateTime?
+  authorId    String?
+  author      User?     @relation("ArticleAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+
+  @@index([category])
+  @@index([publishedAt])
+}
+
+// --------------------------------------------------------------- Messaging
+model Conversation {
+  id        String               @id @default(cuid())
+  title     String?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  members  ConversationMember[]
+  messages Message[]
+}
+
+model ConversationMember {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt       DateTime     @default(now())
+
+  @@unique([conversationId, userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade)
+  body           String
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+  @@index([createdAt])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String?
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([read])
+}
+
+// ---------------------------------------------------------------- Bookings
+// Mirrors the frontend BookingModal flow: a requester books a host (performer /
+// venue / crew profile) for a date + time slot with a budget and a message.
+model Booking {
+  id          String        @id @default(cuid())
+  requesterId String
+  requester   User          @relation("Requester", fields: [requesterId], references: [id], onDelete: Cascade)
+  hostId      String
+  host        User          @relation("Host", fields: [hostId], references: [id], onDelete: Cascade)
+  date        String // ISO date string as picked in the booking modal (e.g. "2026-10-10")
+  timeSlot    String? // e.g. "8–10 PM"
+  budget      String? // e.g. "₹30k–60k" (free-form label, matches frontend budget buckets)
+  message     String?
+  status      BookingStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([requesterId])
+  @@index([hostId])
+  @@index([status])
+}
+
+// ---------------------------------------------------- Directory (venues/events)
+// Imported / curated directory data (e.g. OSM-sourced venues).
+model Venue {
+  id      String  @id @default(cuid())
+  name    String
+  city    String?
+  lat     Float?
+  lng     Float?
+  type    String? // e.g. "live_music_venue", "club", "auditorium"
+  address String?
+  source  String  @default("manual") // e.g. "openstreetmap"
+
+  @@index([city])
+}
+
+model Event {
+  id     String    @id @default(cuid())
+  title  String
+  venue  String?
+  city   String?
+  date   DateTime?
+  genre  String?
+  url    String?
+  source String    @default("manual")
+
+  @@index([city])
+  @@index([date])
+}

@@ -1,0 +1,18 @@
+{
+  "fetched_at": "2026-09-25T14:55:02.002Z",
+  "counts": {
+    "venues": 0,
+    "events": 0,
+    "news": 270
+  },
+  "sources": [
+    "Rolling Stone India",
+    "The Hindu Entertainment",
+    "Indian Express Entertainment"
+  ],
+  "notes": [
+    "OpenStreetMap: no venues returned",
+    "Ticketmaster skipped: TM_API_KEY not set",
+    "Bandsintown skipped: BANDSINTOWN_APP_ID not set"
+  ]
+}
