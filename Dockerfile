@@ -1,18 +1,19 @@
 # Strings backend — production image (Render / Railway / Fly.io)
+# Build context is the repo root (Render Blueprint); backend lives in backend/.
 FROM node:22-alpine
 
 WORKDIR /app
 
 # Install deps first (better layer caching)
-COPY package.json package-lock.json* ./
+COPY backend/package.json backend/package-lock.json* ./
 RUN npm ci --omit=dev
 
 # Prisma client (generated at build time; no live DB needed)
-COPY prisma ./prisma
+COPY backend/prisma ./prisma
 RUN npx prisma generate
 
 # App source
-COPY src ./src
+COPY backend/src ./src
 
 ENV NODE_ENV=production
 EXPOSE 4000
