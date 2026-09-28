@@ -1,0 +1,26 @@
+# Render blueprint for the Strings API.
+# Usage: Render dashboard → New → Blueprint → connect the strings-web repo,
+# point it at the `backend/` directory. Fill in the env vars below (all are
+# already in the local backend/.env — copy values, never commit them).
+services:
+  - type: web
+    name: strings-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false # Supabase transaction pooler (port 6543)
+      - key: DIRECT_URL
+        sync: false # Supabase session pooler (port 5432)
+      - key: SUPABASE_URL
+        sync: false # e.g. https://<ref>.supabase.co (no /rest/v1)
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false # deployed web origin, e.g. https://tanmayayay.github.io/strings-web
