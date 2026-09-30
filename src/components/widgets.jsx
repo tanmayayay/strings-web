@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence, animate } from 'framer-motion';
-import { Sparkles, Check, ShieldCheck, BadgeCheck, Star, Zap, Copy, X } from 'lucide-react';
+import { Sparkles, Check, ShieldCheck, BadgeCheck, Star, Zap, X } from 'lucide-react';
 import { availability } from '../data/demo';
 import { useStore } from '../store/store';
 import './booking.css';
@@ -262,30 +262,6 @@ export function CountdownCard({ gig }) {
           onClick={() => pushToast(`You're on the list for “${gig.title}”. We'll remind you a day before.`)}
         >
           Remind me
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- 12. Referral / invite widget ---------- */
-export function ReferralCard() {
-  const { pushToast } = useStore();
-  const code = 'STRINGS-MEERA-26';
-  return (
-    <div className="referral-card">
-      <h4>Invite your crew 🤝</h4>
-      <p>Bring your band, your engineer, your venue booker. Every 3 verified invites unlocks a featured profile slot.</p>
-      <div className="referral-code">
-        <code>{code}</code>
-        <button
-          className="btn btn-blue btn-xs"
-          onClick={() => {
-            try { navigator.clipboard.writeText(`Join me on Strings — India's music industry network: ${code}`); } catch { /* clipboard unavailable */ }
-            pushToast('Invite link copied — share it with your crew.');
-          }}
-        >
-          <Copy size={13} /> Copy
         </button>
       </div>
     </div>

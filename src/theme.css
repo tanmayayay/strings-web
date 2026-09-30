@@ -583,11 +583,6 @@ img{max-width:100%; display:block;}
 .cd-cell{background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:8px 4px; text-align:center; flex:1;}
 .cd-cell b{font-family:var(--font-display); font-size:18px; display:block;}
 .cd-cell span{font-size:10px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.5px;}
-.referral-card{background:linear-gradient(135deg,var(--blue-dim),var(--sky-dim)); border:1px solid var(--border); border-radius:var(--radius-m); padding:20px;}
-.referral-card h4{font-size:14px; margin-bottom:6px;}
-.referral-card p{font-size:12.5px; color:var(--text-dim); margin-bottom:12px;}
-.referral-code{display:flex; gap:8px; align-items:center;}
-.referral-code code{flex:1; background:var(--panel); border:1px dashed var(--blue); border-radius:10px; padding:9px 12px; font-size:13px; font-weight:700; color:var(--blue); letter-spacing:1px;}
 .hashtag-row{display:flex; flex-wrap:wrap; gap:8px;}
 .hashtag{font-size:12.5px; font-weight:600; color:var(--blue); background:var(--blue-dim); border-radius:16px; padding:5px 12px; cursor:pointer; border:none; transition:transform .12s;}
 .hashtag:hover{transform:translateY(-1px);}

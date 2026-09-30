@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Activity } from 'lucide-react';
 import { PageHead, Avatar, EmptyState } from '../components/ui';
-import { ReferralCard } from '../components/widgets';
 import PostCard from '../components/PostCard';
 import { Posts } from '../lib/api';
 import { useStore } from '../store/store';
@@ -78,10 +77,6 @@ export default function Home() {
           ) : (
             posts.map((p) => <PostCard key={p.id} post={p} />)
           )}
-        </div>
-
-        <div>
-          <ReferralCard />
         </div>
       </div>
     </div>

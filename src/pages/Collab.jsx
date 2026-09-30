@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Plus, MapPin, Wallet, Users as UsersIcon, Check, Bookmark, Briefcase, Search as SearchIcon } from 'lucide-react';
 import { PageHead, Avatar, Tag, EmptyState, Verified } from '../components/ui';
-import { MatchScore, ReferralCard, computeMatchScore } from '../components/widgets';
+import { MatchScore, computeMatchScore } from '../components/widgets';
 import { CITIES } from '../data/demo';
 import { cityDistanceKm } from '../data/cityCoords';
 import { Opps, Profiles } from '../lib/api';
@@ -384,7 +384,6 @@ export default function Collab() {
               </div>
             ))}
           </div>
-          <ReferralCard />
         </div>
       </div>
     </div>
