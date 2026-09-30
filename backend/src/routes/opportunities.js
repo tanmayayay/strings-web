@@ -99,7 +99,8 @@ router.get(
   })
 );
 
-// POST /api/opportunities/:id/apply  (auth)  { message? }
+// POST /api/opportunities/:id/apply  (auth)  { message?, intent? }
+// intent: 'PERFORM' (default) or 'ATTEND' — apply to perform, or just go and enjoy.
 router.post(
   '/:id/apply',
   auth,
@@ -109,12 +110,19 @@ router.post(
     if (opp.status !== 'OPEN') return bad(res, 400, 'This opportunity is closed.');
     if (opp.posterId === req.user.id) return bad(res, 400, 'You cannot apply to your own opportunity.');
 
+    const INTENTS = ['PERFORM', 'ATTEND'];
+    const intent = req.body?.intent ?? 'PERFORM';
+    if (!INTENTS.includes(intent)) {
+      return bad(res, 400, `Field "intent" must be one of: ${INTENTS.join(', ')}.`);
+    }
+
     try {
       const application = await prisma.application.create({
         data: {
           opportunityId: opp.id,
           applicantId: req.user.id,
           message: req.body?.message ?? null,
+          intent,
         },
         include: { applicant: { select: posterSelect } },
       });

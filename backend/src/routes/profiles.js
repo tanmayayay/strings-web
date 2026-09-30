@@ -106,6 +106,25 @@ router.get(
   })
 );
 
+// GET /api/profiles/me/following  (auth) — people the caller follows.
+// Registered BEFORE /:id so Express doesn't capture "me" as an id.
+router.get(
+  '/me/following',
+  auth,
+  asyncHandler(async (req, res) => {
+    const rows = await prisma.connection.findMany({
+      where: { followerId: req.user.id, kind: 'FOLLOW' },
+      include: {
+        followee: {
+          select: { id: true, name: true, stakeholderType: true, city: true, verificationStatus: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ items: rows.map((r) => r.followee) });
+  })
+);
+
 // GET /api/profiles/:id
 router.get(
   '/:id',

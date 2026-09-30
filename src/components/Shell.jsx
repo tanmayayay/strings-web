@@ -43,6 +43,7 @@ function NavGroup({ label, items, onNav, unreadCount }) {
 export default function Shell({ onOpenPalette, onNewPost, onNewOpp }) {
   const { user, userId, logout, theme, toggleTheme, pushToast } = useStore();
   const [notifOpen, setNotifOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [drawer, setDrawer] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [recent, setRecent] = useState([]);
@@ -139,7 +140,7 @@ export default function Shell({ onOpenPalette, onNewPost, onNewOpp }) {
             <button className="icon-btn" onClick={onNewPost} aria-label="Create a post" title="Create a post">
               <Plus size={17} />
             </button>
-            <button className="icon-btn" onClick={(e) => { e.stopPropagation(); setNotifOpen((o) => !o); }} aria-label="Notifications">
+            <button className="icon-btn" onClick={(e) => { e.stopPropagation(); setProfileOpen(false); setNotifOpen((o) => !o); }} aria-label="Notifications">
               <Bell size={16} />
               {unreadCount > 0 && <span className="dot-badge" />}
             </button>
@@ -167,9 +168,31 @@ export default function Shell({ onOpenPalette, onNewPost, onNewOpp }) {
                 </div>
               </div>
             )}
-            <button className="icon-btn" onClick={() => navigate(`/profile/${userId}`)} aria-label="Your profile" style={{ overflow: 'hidden', padding: 0 }}>
+            <button className="icon-btn" onClick={(e) => { e.stopPropagation(); setNotifOpen(false); setProfileOpen((o) => !o); }} aria-label="Your profile menu" aria-expanded={profileOpen} style={{ overflow: 'hidden', padding: 0, position: 'relative', zIndex: 60 }}>
               <Avatar name={user?.name || 'G'} size={38} />
             </button>
+            {profileOpen && (
+              <>
+                <div onClick={() => setProfileOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 59 }} aria-hidden="true" />
+                <div className="panel-drop" style={{ position: 'absolute', top: 48, right: 0, width: 280, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, boxShadow: 'var(--shadow-pop)', zIndex: 60, overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+                  <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <Avatar name={user?.name || 'Guest'} size={40} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.name || 'Guest'}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>{user ? `${user.stakeholderType} · ${user.city}` : 'Not signed in'}</div>
+                    </div>
+                  </div>
+                  <div style={{ padding: 8 }}>
+                    <button className="nav-item" style={{ width: '100%' }} onClick={() => { setProfileOpen(false); navigate(`/profile/${userId}`); }}>
+                      <User size={17} strokeWidth={1.9} /> Edit profile
+                    </button>
+                    <button className="nav-item" style={{ width: '100%' }} onClick={() => { setProfileOpen(false); logout(); navigate('/'); }}>
+                      <LogOut size={17} strokeWidth={1.9} /> Sign out
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </header>
 

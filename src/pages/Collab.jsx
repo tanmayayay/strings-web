@@ -4,6 +4,7 @@ import { Plus, MapPin, Wallet, Users as UsersIcon, Check, Bookmark, Briefcase, S
 import { PageHead, Avatar, Tag, EmptyState, Verified } from '../components/ui';
 import { MatchScore, ReferralCard, computeMatchScore } from '../components/widgets';
 import { CITIES } from '../data/demo';
+import { cityDistanceKm } from '../data/cityCoords';
 import { Opps, Profiles } from '../lib/api';
 import { useStore } from '../store/store';
 
@@ -38,12 +39,17 @@ export default function Collab() {
   const [tab, setTab] = useState('discover');
   const [cityF, setCityF] = useState('all');
   const [genreF, setGenreF] = useState('all');
+  const [radiusF, setRadiusF] = useState('any'); // 'any' | '25' | '50' | '100' | '250'
   const [q, setQ] = useState('');
   const [opps, setOpps] = useState([]);
   const [genreOptions, setGenreOptions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [appliedList, setAppliedList] = useState([]); // session-local snapshots {id,title,city}
+  const [appliedList, setAppliedList] = useState([]); // session-local snapshots {id,title,city,intent}
   const appliedIds = useMemo(() => new Set(appliedList.map((a) => a.id)), [appliedList]);
+  const appliedIntentById = useMemo(
+    () => new Map(appliedList.map((a) => [a.id, a.intent || 'PERFORM'])),
+    [appliedList]
+  );
   const [expandedOppId, setExpandedOppId] = useState(null);
   const [appsByOpp, setAppsByOpp] = useState({});
   const [appsLoadingId, setAppsLoadingId] = useState(null);
@@ -101,25 +107,42 @@ export default function Collab() {
   }, [userId]);
 
   const ql = q.trim().toLowerCase();
-  const filtered = useMemo(() => opps.filter((o) =>
-    !ql || [o.title, o.description, o.requirements, o.city, o.genre, o.poster?.name]
-      .filter(Boolean).join(' ').toLowerCase().includes(ql)
-  ), [opps, ql]);
+  const userCity = user?.city || null;
+  // Text search + optional radius filter (client-side). When a radius is set,
+  // gigs in cities missing from the map are hidden and counted so the user
+  // knows why they disappeared.
+  const { list: filtered, hiddenUnmapped } = useMemo(() => {
+    const radiusKm = radiusF === 'any' ? null : Number(radiusF);
+    const radiusActive = radiusKm != null && !!userCity;
+    const list = opps.filter((o) => {
+      if (ql && ![o.title, o.description, o.requirements, o.city, o.genre, o.poster?.name]
+        .filter(Boolean).join(' ').toLowerCase().includes(ql)) return false;
+      if (!radiusActive) return true;
+      const d = cityDistanceKm(userCity, o.city);
+      return d != null && d <= radiusKm;
+    });
+    const hiddenUnmapped = radiusActive
+      ? opps.filter((o) => cityDistanceKm(userCity, o.city) == null).length
+      : 0;
+    return { list, hiddenUnmapped };
+  }, [opps, ql, radiusF, userCity]);
 
   // sort by AI match score for the viewer
   const sorted = useMemo(() =>
     [...filtered].sort((a, b) => computeMatchScore(b, user).score - computeMatchScore(a, user).score),
   [filtered, user]);
 
-  const apply = async (opp) => {
+  const apply = async (opp, intent = 'PERFORM') => {
     if (appliedIds.has(opp.id)) return;
     try {
-      await Opps.apply(opp.id, '');
-      setAppliedList((prev) => [...prev, { id: opp.id, title: opp.title, city: opp.city }]);
-      pushToast(`Applied to \u201C${opp.title}\u201D. The poster usually responds within 2 days.`);
+      await Opps.apply(opp.id, '', intent);
+      setAppliedList((prev) => [...prev, { id: opp.id, title: opp.title, city: opp.city, intent }]);
+      pushToast(intent === 'ATTEND'
+        ? `You're on the list for \u201C${opp.title}\u201D. Enjoy the show!`
+        : `Applied to \u201C${opp.title}\u201D. The poster usually responds within 2 days.`);
     } catch (e) {
       if (e.status === 409) {
-        setAppliedList((prev) => prev.some((a) => a.id === opp.id) ? prev : [...prev, { id: opp.id, title: opp.title, city: opp.city }]);
+        setAppliedList((prev) => prev.some((a) => a.id === opp.id) ? prev : [...prev, { id: opp.id, title: opp.title, city: opp.city, intent: 'PERFORM' }]);
         pushToast("You've already applied", 'error');
       } else {
         pushToast(e.message, 'error');
@@ -192,6 +215,19 @@ export default function Collab() {
             <select className="filter-select" value={cityF} onChange={(e) => setCityF(e.target.value)}>
               <option value="all">All cities</option>{CITIES.slice(0, 5).map((c) => <option key={c}>{c}</option>)}
             </select>
+            <select
+              className="filter-select"
+              value={radiusF}
+              onChange={(e) => setRadiusF(e.target.value)}
+              disabled={!userCity}
+              title={!userCity ? 'Set your city in your profile to use radius search' : `Gigs within this distance of ${userCity}`}
+            >
+              <option value="any">Any distance</option>
+              <option value="25">Within 25 km</option>
+              <option value="50">Within 50 km</option>
+              <option value="100">Within 100 km</option>
+              <option value="250">Within 250 km</option>
+            </select>
             <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
               <SearchIcon size={14} style={{ position: 'absolute', left: 10, opacity: 0.5, pointerEvents: 'none' }} />
               <input
@@ -203,6 +239,11 @@ export default function Collab() {
               />
             </span>
           </div>
+          {hiddenUnmapped > 0 && (
+            <p style={{ fontSize: 12, color: 'var(--text-faint)', margin: '8px 0 0' }}>
+              {hiddenUnmapped} {hiddenUnmapped === 1 ? 'gig' : 'gigs'} hidden — city not on the map yet.
+            </p>
+          )}
           {loading ? (
             <OppSkeleton />
           ) : sorted.length === 0 ? (
@@ -218,6 +259,8 @@ export default function Collab() {
             const isMine = poster?.id === userId;
             const budget = fmtBudget(o);
             const apps = appsByOpp[o.id] || [];
+            const performerCount = apps.filter((a) => (a.intent || 'PERFORM') === 'PERFORM').length;
+            const attendingCount = apps.filter((a) => a.intent === 'ATTEND').length;
             return (
               <div className="opp-card" key={o.id}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
@@ -254,9 +297,16 @@ export default function Collab() {
                         {expandedOppId === o.id ? 'Hide applications' : `Applications (${o._count?.applications ?? 0})`}
                       </button>
                     ) : !isMine ? (
-                      <button className={`btn btn-sm ${done ? 'btn-ghost' : 'btn-blue'}`} disabled={done} onClick={() => apply(o)}>
-                        {done ? <><Check size={14} /> Applied</> : 'Apply'}
-                      </button>
+                      done ? (
+                        <button className="btn btn-sm btn-ghost" disabled>
+                          <Check size={14} /> {appliedIntentById.get(o.id) === 'ATTEND' ? 'Attending' : 'Applied'}
+                        </button>
+                      ) : (
+                        <>
+                          <button className="btn btn-sm btn-blue" onClick={() => apply(o, 'PERFORM')}>Apply to perform</button>
+                          <button className="btn btn-sm btn-ghost" onClick={() => apply(o, 'ATTEND')}>I&apos;m attending</button>
+                        </>
+                      )
                     ) : null}
                   </div>
                 </div>
@@ -266,7 +316,12 @@ export default function Collab() {
                       <p style={{ fontSize: 12.5, color: 'var(--text-faint)' }}>Loading applications\u2026</p>
                     ) : apps.length === 0 ? (
                       <p style={{ fontSize: 12.5, color: 'var(--text-faint)' }}>No applications yet.</p>
-                    ) : apps.map((a) => (
+                    ) : (
+                      <>
+                        <p style={{ fontSize: 12.5, color: 'var(--text-dim)', margin: '0 0 10px' }}>
+                          {performerCount} {performerCount === 1 ? 'performer' : 'performers'} · {attendingCount} attending
+                        </p>
+                        {apps.map((a) => (
                       <div className="mini-list-item" key={a.id}>
                         <span onClick={() => a.applicant && navigate(`/profile/${a.applicant.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, cursor: a.applicant ? 'pointer' : 'default' }}>
                           <Avatar name={a.applicant?.name || '?'} size={30} />
@@ -276,6 +331,7 @@ export default function Collab() {
                             {a.message && <span style={{ fontStyle: 'italic' }}>\u201C{a.message}\u201D</span>}
                           </div>
                         </span>
+                        <Tag color={a.intent === 'ATTEND' ? 'green' : 'blue'}>{a.intent === 'ATTEND' ? 'Attending' : 'Performer'}</Tag>
                         <Tag color={STATUS_TAG[a.status] || 'sky'}>{a.status}</Tag>
                         {a.status === 'PENDING' && (
                           <>
@@ -284,7 +340,9 @@ export default function Collab() {
                           </>
                         )}
                       </div>
-                    ))}
+                        ))}
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -321,7 +379,7 @@ export default function Collab() {
               <p style={{ fontSize: 12.5, color: 'var(--text-faint)' }}>Apply to an opportunity to track it here.</p>
             ) : appliedList.map((a) => (
               <div className="mini-list-item" key={a.id} style={{ cursor: 'default' }}>
-                <Tag color="sky">Pending</Tag>
+                <Tag color={a.intent === 'ATTEND' ? 'green' : 'sky'}>{a.intent === 'ATTEND' ? 'Attending' : 'Pending'}</Tag>
                 <div><b style={{ fontWeight: 500 }}>{a.title}</b><span>{a.city}</span></div>
               </div>
             ))}

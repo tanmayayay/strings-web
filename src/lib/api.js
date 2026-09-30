@@ -94,6 +94,8 @@ export const Profiles = {
   update: (id, data) => api(`/api/profiles/${id}`, { method: 'PATCH', body: data }),
   follow: (id) => api(`/api/profiles/${id}/follow`, { method: 'POST' }),
   unfollow: (id) => api(`/api/profiles/${id}/follow`, { method: 'DELETE' }),
+  /** People the caller follows — for the Messages "new conversation" picker. */
+  following: () => api('/api/profiles/me/following'),
 };
 
 export const Posts = {
@@ -110,7 +112,7 @@ export const Opps = {
   list: (params = {}) => api(`/api/opportunities${qs(params)}`, { auth: false }),
   get: (id) => api(`/api/opportunities/${id}`, { auth: false }),
   create: (data) => api('/api/opportunities', { method: 'POST', body: data }),
-  apply: (id, message) => api(`/api/opportunities/${id}/apply`, { method: 'POST', body: { message } }),
+  apply: (id, message, intent) => api(`/api/opportunities/${id}/apply`, { method: 'POST', body: { message, intent } }),
   applications: (id, params = {}) => api(`/api/opportunities/${id}/applications${qs(params)}`),
   setApplicationStatus: (appId, status) =>
     api(`/api/opportunities/applications/${appId}`, { method: 'PATCH', body: { status } }),
@@ -140,4 +142,31 @@ export const Directory = {
   events: (params = {}) => api(`/api/events${qs(params)}`, { auth: false }),
   articles: (params = {}) => api(`/api/articles${qs(params)}`, { auth: false }),
   article: (id) => api(`/api/articles/${id}`, { auth: false }),
+};
+
+/* ---------- user-testing batch (2026-09-29) ---------- */
+
+export const Tracks = {
+  list: (params = {}) => api(`/api/tracks${qs(params)}`),
+  get: (id) => api(`/api/tracks/${id}`),
+  create: (data) => api('/api/tracks', { method: 'POST', body: data }),
+  remove: (id) => api(`/api/tracks/${id}`, { method: 'DELETE' }),
+  /** Star/unstar a track. Returns { liked }. */
+  toggleLike: (id) => api(`/api/tracks/${id}/like`, { method: 'POST' }),
+};
+
+export const Groups = {
+  list: (params = {}) => api(`/api/groups${qs(params)}`),
+  create: (data) => api('/api/groups', { method: 'POST', body: data }),
+  get: (id) => api(`/api/groups/${id}`),
+  join: (id) => api(`/api/groups/${id}/join`, { method: 'POST' }),
+  leave: (id) => api(`/api/groups/${id}/leave`, { method: 'POST' }),
+  messages: (id, params = {}) => api(`/api/groups/${id}/messages${qs(params)}`),
+  send: (id, body) => api(`/api/groups/${id}/messages`, { method: 'POST', body: { body } }),
+  setRole: (id, userId, role) => api(`/api/groups/${id}/members/${userId}`, { method: 'PATCH', body: { role } }),
+  removeMember: (id, userId) => api(`/api/groups/${id}/members/${userId}`, { method: 'DELETE' }),
+};
+
+export const NewsLive = {
+  get: () => api('/api/news/live', { auth: false }),
 };

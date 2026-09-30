@@ -24,6 +24,29 @@ import Settings from './pages/Settings';
 import About from './pages/About';
 import Support from './pages/Support';
 import Saved from './pages/Saved';
+import EmailVerified from './pages/EmailVerified';
+
+/* Supabase email-confirmation links redirect to the Site URL with the
+   session tokens in the URL fragment:
+     #access_token=…&refresh_token=…&type=signup
+   (or #error=… when the link is expired/invalid).
+   Catch that here BEFORE HashRouter mounts — HashRouter would read
+   `#access_token=…` as a route path and bounce to "/". */
+function getEmailCallback() {
+  const hash = window.location.hash || '';
+  if (!hash || hash.startsWith('#/')) return null; // ordinary in-app route
+  const params = new URLSearchParams(hash.slice(1));
+  if (params.get('error')) {
+    return { status: 'error', message: params.get('error_description') || 'This link is invalid or has expired.' };
+  }
+  const type = params.get('type') || '';
+  // Only confirmation-style links get the thank-you page; a recovery link
+  // has no reset-password UI to hand off to, so let the router handle it.
+  if (params.get('access_token') && ['signup', 'email_change', 'magiclink', 'invite'].includes(type)) {
+    return { status: 'ok', type };
+  }
+  return null;
+}
 
 function ScrollTop() {
   const { pathname } = useLocation();
@@ -127,6 +150,20 @@ function AppShell() {
 }
 
 export default function App() {
+  const [emailCallback, setEmailCallback] = useState(() => getEmailCallback());
+
+  const dismissEmailCallback = useCallback(() => {
+    // Drop the token fragment, then hand control to the router.
+    // The session is already persisted by supabase-js, so the user lands
+    // signed in (fresh signups flow into onboarding via LandingGate).
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/`);
+    setEmailCallback(null);
+  }, []);
+
+  if (emailCallback) {
+    return <EmailVerified result={emailCallback} onDone={dismissEmailCallback} />;
+  }
+
   return (
     <HashRouter>
       <StoreProvider>

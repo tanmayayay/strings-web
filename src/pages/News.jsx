@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Clock, Bookmark, ArrowRight, ExternalLink } from 'lucide-react';
 import { PageHead, Tag, EmptyState } from '../components/ui';
-import { liveNews, fmtRelative, viaLabel } from '../data/liveData';
-import { Directory } from '../lib/api';
+import { Directory, NewsLive } from '../lib/api';
 import { timeAgo } from '../lib/format';
 import { useStore } from '../store/store';
 
@@ -41,6 +40,29 @@ export default function News() {
   }, [filter, reloadKey]);
 
   const [featured, ...rest] = articles;
+
+  // Live headlines served by the backend (cached, refreshed every 6h).
+  // Fails quiet — the section hides and the newsroom articles below still work.
+  const [liveItems, setLiveItems] = useState([]);
+  const [liveUpdatedAt, setLiveUpdatedAt] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    NewsLive.get()
+      .then((data) => {
+        if (!cancelled) {
+          setLiveItems(data.items || []);
+          setLiveUpdatedAt(data.updatedAt || null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLiveItems([]);
+          setLiveUpdatedAt(null);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [reloadKey]);
 
   const saveBtn = (a, e) => {
     e.stopPropagation();
@@ -83,41 +105,41 @@ export default function News() {
   return (
     <div>
       <PageHead title="News" sub="Today's Indian music-industry headlines, published daily by the Strings newsroom." />
-      {liveNews.length > 0 && (
+      {liveItems.length > 0 && (
         <section style={{ margin: '18px 0 6px' }}>
-          <h4 style={{ fontSize: 13, color: 'var(--text-dim)', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h4 style={{ fontSize: 13, color: 'var(--text-dim)', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             Live now
             <Tag color="indigo">Real stories</Tag>
-            <span style={{ fontWeight: 400, color: 'var(--text-faint)' }}>{liveNews.length} headlines</span>
+            <span style={{ fontWeight: 400, color: 'var(--text-faint)' }}>{liveItems.length} headlines</span>
+            {liveUpdatedAt && (
+              <span style={{ fontWeight: 400, color: 'var(--text-faint)' }}>
+                · Updated {timeAgo(liveUpdatedAt)} · refreshes every 6 hours
+              </span>
+            )}
           </h4>
-          {liveNews.slice(0, 10).map((n, i) => {
-            const rel = fmtRelative(n.published_at);
-            return (
-              <div className="article-card" key={n.id || `${n.title || 'story'}-${i}`} style={{ borderColor: 'var(--blue)' }}>
-                <div className="post-tags">
-                  {n.source && <Tag color="blue">{n.source}</Tag>}
-                  {rel && (
-                    <span style={{ fontSize: 11.5, color: 'var(--text-faint)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      <Clock size={11} /> {rel}
-                    </span>
-                  )}
-                  <Tag color="indigo">{viaLabel(n)}</Tag>
-                </div>
-                <h4 style={{ fontSize: 16, margin: '10px 0 8px' }}>{n.title || 'Untitled story'}</h4>
-                {n.excerpt && <p style={{ color: 'var(--text-dim)', fontSize: 13.5, lineHeight: 1.6 }}>{n.excerpt}</p>}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, flexWrap: 'wrap', gap: 8 }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
-                    {n.source ? `Via ${n.source}` : 'Live feed'}{rel ? ` · ${rel}` : ''}
+          {liveItems.slice(0, 10).map((n, i) => (
+            <div className="article-card" key={n.id || n.url || `live-${i}`} style={{ borderColor: 'var(--blue)' }}>
+              <div className="post-tags">
+                {n.source && <Tag color="blue">{n.source}</Tag>}
+                {n.publishedAt && (
+                  <span style={{ fontSize: 11.5, color: 'var(--text-faint)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Clock size={11} /> {timeAgo(n.publishedAt)}
                   </span>
-                  {n.url && (
-                    <a className="btn btn-blue btn-xs" href={n.url} target="_blank" rel="noopener noreferrer">
-                      Read story <ExternalLink size={13} />
-                    </a>
-                  )}
-                </div>
+                )}
               </div>
-            );
-          })}
+              <h4 style={{ fontSize: 16, margin: '10px 0 8px' }}>{n.title || 'Untitled story'}</h4>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, flexWrap: 'wrap', gap: 8 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
+                  {n.source ? `Via ${n.source}` : 'Live feed'}
+                </span>
+                {n.url && (
+                  <a className="btn btn-blue btn-xs" href={n.url} target="_blank" rel="noopener noreferrer">
+                    Read story <ExternalLink size={13} />
+                  </a>
+                )}
+              </div>
+            </div>
+          ))}
         </section>
       )}
       <div className="filter-row">

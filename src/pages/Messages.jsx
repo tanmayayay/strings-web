@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Send, MessageCircle } from 'lucide-react';
-import { PageHead, Avatar, EmptyState } from '../components/ui';
+import { Send, MessageCircle, Plus } from 'lucide-react';
+import { PageHead, Avatar, EmptyState, Modal } from '../components/ui';
 import { useStore } from '../store/store';
-import { Convos } from '../lib/api';
+import { Convos, Profiles } from '../lib/api';
 
 const POLL_MS = 5000;
 
@@ -16,6 +16,11 @@ export default function Messages() {
   const [thread, setThread] = useState([]);
   const [text, setText] = useState('');
   const bodyRef = useRef(null);
+  // "New message" modal state.
+  const [newOpen, setNewOpen] = useState(false);
+  const [following, setFollowing] = useState([]);
+  const [followingLoading, setFollowingLoading] = useState(false);
+  const [fq, setFq] = useState('');
 
   const convo = convos.find((c) => c.id === activeId) || null;
   const other = convo ? convo.members.find((m) => m.id !== userId) || convo.members[0] : null;
@@ -81,6 +86,33 @@ export default function Messages() {
     bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight });
   }, [thread.length, activeId]);
 
+  // Load the follow list when the "New message" modal opens.
+  useEffect(() => {
+    if (!newOpen) return;
+    let cancelled = false;
+    setFollowingLoading(true);
+    setFq('');
+    Profiles.following()
+      .then((res) => { if (!cancelled) setFollowing(res.items || []); })
+      .catch((e) => { if (!cancelled) pushToast(e.message, 'error'); })
+      .finally(() => { if (!cancelled) setFollowingLoading(false); });
+    return () => { cancelled = true; };
+  }, [newOpen, pushToast]);
+
+  const openConvo = async (person) => {
+    try {
+      const res = await Convos.open(person.id);
+      setNewOpen(false);
+      await loadConvos(); // ensure the convo is listed…
+      navigate(`/messages?c=${res.id}`); // …so the ?c= deep-link effect selects it
+    } catch (e) {
+      pushToast(e.message, 'error');
+    }
+  };
+
+  const fql = fq.trim().toLowerCase();
+  const filteredFollowing = following.filter((p) => !fql || (p.name || '').toLowerCase().includes(fql));
+
   const send = async () => {
     const body = text.trim();
     if (!body || !activeId) return;
@@ -100,6 +132,12 @@ export default function Messages() {
       <PageHead title="Messages" sub="Conversations with your network — requests from non-connections appear here too." />
       <div className="msg-shell">
         <div className="msg-list">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderBottom: '1px solid var(--border-soft)' }}>
+            <b style={{ fontSize: 13.5 }}>Conversations</b>
+            <button className="btn btn-blue btn-sm" onClick={() => setNewOpen(true)}>
+              <Plus size={14} /> New message
+            </button>
+          </div>
           {convos.length === 0 ? (
             <EmptyState icon={<MessageCircle size={22} />} title="No conversations yet" text="Start one from someone's profile." />
           ) : (
@@ -140,6 +178,44 @@ export default function Messages() {
         </div>
       </div>
       <p style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 12 }}>Signed in as {user?.name}.</p>
+
+      {newOpen && (
+        <Modal title="New message" onClose={() => setNewOpen(false)}>
+          <input
+            type="text"
+            placeholder="Search people you follow…"
+            value={fq}
+            onChange={(e) => setFq(e.target.value)}
+            autoFocus
+          />
+          <div style={{ maxHeight: 320, overflowY: 'auto', marginTop: 10 }}>
+            {followingLoading ? (
+              <p style={{ fontSize: 13, color: 'var(--text-faint)', padding: '12px 4px' }}>Loading…</p>
+            ) : filteredFollowing.length === 0 ? (
+              <EmptyState
+                icon={<MessageCircle size={22} />}
+                title="Nobody here yet"
+                text="Follow people from Collab or their profiles to message them."
+              />
+            ) : (
+              filteredFollowing.map((p) => (
+                <button
+                  key={p.id}
+                  className="msg-list-item"
+                  style={{ width: '100%', textAlign: 'left' }}
+                  onClick={() => openConvo(p)}
+                >
+                  <Avatar name={p.name || '?'} size={38} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <b>{p.name}</b>
+                    <p>{[p.stakeholderType, p.city].filter(Boolean).join(' · ')}</p>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

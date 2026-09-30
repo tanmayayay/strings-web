@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bookmark, Newspaper, Handshake, Image as ImageIcon, MessageSquare } from 'lucide-react';
+import { Bookmark, Newspaper, Handshake, Image as ImageIcon, MessageSquare, Music } from 'lucide-react';
 import { PageHead, Avatar, Tag, EmptyState } from '../components/ui';
-import { Opps, Posts, Directory } from '../lib/api';
+import { Opps, Posts, Directory, Tracks } from '../lib/api';
 import { useStore } from '../store/store';
 
 /* Bookmarks store {kind, id} locally. Resolve each id against the real API.
@@ -29,6 +29,7 @@ function useResolvedBookmarks(bookmarks) {
         try {
           if (b.kind === 'opp') item = await Opps.get(b.id);
           else if (b.kind === 'post' || b.kind === 'media') item = await Posts.get(b.id);
+          else if (b.kind === 'track') item = await Tracks.get(b.id);
           else if (b.kind === 'article') item = articles.find((a) => a.id === b.id) || null;
         } catch {
           item = null;
@@ -42,10 +43,19 @@ function useResolvedBookmarks(bookmarks) {
   return resolved;
 }
 
+const TABS = [
+  { id: 'all', label: 'All' },
+  { id: 'gighub', label: 'Gighub', kinds: ['media', 'track'] },
+  { id: 'collab', label: 'Collab', kinds: ['opp'] },
+  { id: 'news', label: 'News', kinds: ['article'] },
+  { id: 'posts', label: 'Posts', kinds: ['post'] },
+];
+
 export default function Saved() {
   const { bookmarks, toggleBookmark, pushToast } = useStore();
   const navigate = useNavigate();
   const resolved = useResolvedBookmarks(bookmarks);
+  const [tab, setTab] = useState('all');
 
   const unsave = (kind, id) => { toggleBookmark(kind, id); pushToast('Removed from bookmarks.'); };
   const itemsFor = (kind) => bookmarks
@@ -101,6 +111,29 @@ export default function Saved() {
       },
     },
     {
+      kind: 'track', title: 'Tracks', icon: Music,
+      items: itemsFor('track'),
+      render: (t) => {
+        const uname = t.uploader?.name || t.author?.name || 'Strings member';
+        return (
+          <div className="media-tile" key={t.id}>
+            <div className="media-thumb" style={{ aspectRatio: '16/9', background: 'var(--gradient-card)' }}>
+              <div style={{ position: 'relative' }}><Tag color="blue">Track</Tag></div>
+              <div style={{ position: 'relative', color: '#fff' }}>
+                <b style={{ fontSize: 14.5, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title || 'Untitled track'}</b>
+                <div style={{ fontSize: 12, opacity: 0.85 }}>{uname}</div>
+              </div>
+              {t.audioUrl ? (
+                <audio controls src={t.audioUrl} preload="none" style={{ width: '100%', position: 'relative' }} />
+              ) : (
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,.8)', position: 'relative' }}>No audio attached</span>
+              )}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
       kind: 'post', title: 'Posts', icon: MessageSquare,
       items: itemsFor('post'),
       render: (p) => {
@@ -117,23 +150,39 @@ export default function Saved() {
   ];
 
   const total = groups.reduce((a, g) => a + g.items.length, 0);
+  const activeTab = TABS.find((t) => t.id === tab) || TABS[0];
+  const visibleGroups = tab === 'all' ? groups : groups.filter((g) => activeTab.kinds.includes(g.kind));
+  const visibleTotal = visibleGroups.reduce((a, g) => a + g.items.length, 0);
 
   return (
     <div>
-      <PageHead title="Saved" sub="Your bookmarks collection — opportunities, articles, clips and posts, in one place." />
+      <PageHead title="Saved" sub="Your bookmarks collection — opportunities, articles, clips, tracks and posts, in one place." />
+      <div className="filter-row">
+        {TABS.map((t) => (
+          <button key={t.id} className={`filter-chip${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
       {total === 0 ? (
         <EmptyState
           icon={<Bookmark size={22} />}
           title="Nothing saved yet"
-          text="Tap Save on any opportunity, article, clip or post and it will land here for later."
+          text="Tap Save on any opportunity, article, clip, track or post and it will land here for later."
           action={<button className="btn btn-blue btn-sm" onClick={() => navigate('/collab')}>Browse Collab</button>}
         />
-      ) : groups.filter((g) => g.items.length > 0).map((g) => (
+      ) : visibleTotal === 0 ? (
+        <EmptyState
+          icon={<Bookmark size={22} />}
+          title={`Nothing saved in ${activeTab.label}`}
+          text="Tap Save on items across the app to build this folder."
+        />
+      ) : visibleGroups.filter((g) => g.items.length > 0).map((g) => (
         <div key={g.kind} style={{ marginBottom: 28 }}>
           <h4 style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <g.icon size={15} style={{ color: 'var(--blue)' }} /> {g.title} ({g.items.length})
           </h4>
-          <div style={g.kind === 'media' ? { display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 14 } : undefined}>
+          <div style={['media', 'track'].includes(g.kind) ? { display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 14 } : undefined}>
             {g.items.map((item) => (
               <div key={item.id} style={{ position: 'relative' }}>
                 {g.render(item)}

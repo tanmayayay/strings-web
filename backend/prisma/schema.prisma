@@ -103,6 +103,11 @@ model User {
   conversationMemberships ConversationMember[]
   notifications           Notification[]
   articles                Article[]            @relation("ArticleAuthor")
+  tracks                  Track[]
+  trackLikes              TrackLike[]
+  createdGroups           CommunityGroup[]
+  groupMemberships        GroupMember[]
+  groupMessages           GroupMessage[]
 
   @@index([stakeholderType])
   @@index([city])
@@ -201,6 +206,7 @@ model Application {
   applicantId   String
   applicant     User              @relation("Applicant", fields: [applicantId], references: [id], onDelete: Cascade)
   status        ApplicationStatus @default(PENDING)
+  intent        ApplicationIntent @default(PERFORM)
   message       String?
   createdAt     DateTime          @default(now())
 
@@ -322,4 +328,90 @@ model Event {
 
   @@index([city])
   @@index([date])
+}
+
+// ============================================================
+// User-testing batch (2026-09-29)
+// ============================================================
+
+enum TrackKind {
+  TRACK
+  BEAT
+  SAMPLE
+}
+
+// Gighub: music uploads — the "code files" of the GitHub metaphor.
+model Track {
+  id          String    @id @default(cuid())
+  uploaderId  String
+  uploader    User      @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+  title       String
+  kind        TrackKind @default(TRACK)
+  audioUrl    String
+  durationSec Int?
+  createdAt   DateTime  @default(now())
+
+  likes TrackLike[]
+
+  @@index([uploaderId])
+  @@index([createdAt])
+}
+
+model TrackLike {
+  trackId   String
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([trackId, userId])
+  @@index([userId])
+}
+
+enum GroupRole {
+  ADMIN
+  COADMIN
+  MEMBER
+}
+
+// Community: WhatsApp-style groups — one admin, up to 3 co-admins.
+model CommunityGroup {
+  id        String   @id @default(cuid())
+  name      String
+  desc      String?
+  creatorId String
+  creator   User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  members  GroupMember[]
+  messages GroupMessage[]
+}
+
+model GroupMember {
+  groupId  String
+  group    CommunityGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     GroupRole      @default(MEMBER)
+  joinedAt DateTime       @default(now())
+
+  @@id([groupId, userId])
+  @@index([userId])
+}
+
+model GroupMessage {
+  id        String         @id @default(cuid())
+  groupId   String
+  group     CommunityGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User           @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime       @default(now())
+
+  @@index([groupId, createdAt])
+}
+
+enum ApplicationIntent {
+  PERFORM
+  ATTEND
 }

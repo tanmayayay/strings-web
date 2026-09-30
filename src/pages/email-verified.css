@@ -1,0 +1,105 @@
+/* Email-verification landing page — light, calm, one clear action. */
+
+.ev-wrap {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(720px 380px at 50% -80px, var(--blue-dim), transparent 70%),
+    var(--bg-soft);
+  font-family: var(--font-body);
+}
+
+.ev-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  box-shadow: 0 24px 60px -24px rgba(42, 99, 238, 0.25);
+  max-width: 440px;
+  width: 100%;
+  padding: 44px 40px 40px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.ev-tick {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--green);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 28px 0 24px;
+  box-shadow: 0 12px 28px -8px rgba(22, 163, 74, 0.55);
+}
+
+.ev-tick--error {
+  background: var(--amber);
+  box-shadow: 0 12px 28px -8px rgba(217, 119, 6, 0.5);
+}
+
+.ev-card h1 {
+  font-size: 30px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin: 0 0 12px;
+}
+
+.ev-lead {
+  font-size: 16px;
+  color: var(--text);
+  margin: 0 0 8px;
+  line-height: 1.55;
+}
+
+.ev-lead strong {
+  color: var(--blue-strong);
+  overflow-wrap: anywhere;
+}
+
+.ev-sub {
+  font-size: 14.5px;
+  color: var(--text-dim);
+  margin: 0 0 28px;
+  line-height: 1.6;
+}
+
+.ev-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: none;
+  border-radius: 14px;
+  padding: 15px 28px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--gradient-brand);
+  box-shadow: 0 10px 24px -8px rgba(42, 99, 238, 0.6);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ev-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px -8px rgba(42, 99, 238, 0.65);
+}
+
+.ev-cta:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 480px) {
+  .ev-card {
+    padding: 36px 26px 32px;
+  }
+  .ev-card h1 {
+    font-size: 26px;
+  }
+}

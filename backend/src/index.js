@@ -10,6 +10,9 @@ import bookingsRouter from './routes/bookings.js';
 import directoryRouter from './routes/directory.js';
 import messagesRouter from './routes/messages.js';
 import notificationsRouter from './routes/notifications.js';
+import tracksRouter from './routes/tracks.js';
+import groupsRouter from './routes/groups.js';
+import newsRouter from './routes/news.js';
 import { isSupabaseMode, isSet } from './middleware/auth.js';
 
 const app = express();
@@ -59,6 +62,9 @@ app.use('/api/bookings', bookingsRouter);
 app.use('/api', directoryRouter); // /api/venues, /api/events, /api/articles
 app.use('/api/conversations', messagesRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/tracks', tracksRouter);
+app.use('/api/groups', groupsRouter);
+app.use('/api/news', newsRouter);
 
 // 404 for unknown /api routes.
 app.use('/api', (req, res) => {
