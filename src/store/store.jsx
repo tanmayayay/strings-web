@@ -30,6 +30,10 @@ export function StoreProvider({ children }) {
   const [authLoading, setAuthLoading] = useState(true);
   const [profile, setProfile] = useState(null); // Prisma user row from the API
   const [profileLoading, setProfileLoading] = useState(false);
+  // Which auth user the current `profile` was fetched for. Until it matches the
+  // live session, the profile is still "loading" — this stops route guards from
+  // bouncing deep links (e.g. a reload on /#/news) to the landing page.
+  const [profileFor, setProfileFor] = useState(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -74,6 +78,7 @@ export function StoreProvider({ children }) {
       return null;
     } finally {
       setProfileLoading(false);
+      setProfileFor(session.user?.id ?? null);
     }
   }, [session]);
 
@@ -93,6 +98,7 @@ export function StoreProvider({ children }) {
 
   // The app's "user" is the Prisma profile (id, name, stakeholderType, ...).
   const user = profile;
+  const profilePending = Boolean(session) && (profileLoading || profileFor !== (session?.user?.id ?? null));
   const userId = profile?.id ?? null;
   const authUser = session?.user ?? null;
 
@@ -102,12 +108,16 @@ export function StoreProvider({ children }) {
   // ---- bookmarks (local preference) ----
   const [bookmarks, setBookmarks] = useLocal('strings.bookmarks', []); // [{kind:'opp'|'article'|'media'|'post', id}]
   const isBookmarked = useCallback((kind, id) => bookmarks.some((b) => b.kind === kind && b.id === id), [bookmarks]);
-  const toggleBookmark = useCallback((kind, id) => {
-    setBookmarks((b) => {
-      const exists = b.some((x) => x.kind === kind && x.id === id);
-      return exists ? b.filter((x) => !(x.kind === kind && x.id === id)) : [...b, { kind, id }];
-    });
-  }, [setBookmarks]);
+  // Returns true when the item is now saved, false when it was removed.
+  // `data` (optional) snapshots items that don't live in our database —
+  // e.g. live news headlines — so the Saved page can render them later.
+  const toggleBookmark = useCallback((kind, id, data) => {
+    const exists = bookmarks.some((x) => x.kind === kind && x.id === id);
+    setBookmarks((b) => (exists
+      ? b.filter((x) => !(x.kind === kind && x.id === id))
+      : [...b, data ? { kind, id, data } : { kind, id }]));
+    return !exists;
+  }, [bookmarks, setBookmarks]);
 
   // ---- community groups (local for v1 — no backend model yet) ----
   const [joined, setJoined] = useLocal('strings.joined', ['guitarists']);
@@ -130,7 +140,7 @@ export function StoreProvider({ children }) {
   const value = useMemo(() => ({
     theme, toggleTheme,
     // auth
-    session, authUser, authLoading, profile, profileLoading, refreshProfile,
+    session, authUser, authLoading, profile, profileLoading: profilePending, refreshProfile,
     user, userId, signIn, signUp, signOut,
     logout: signOut, // alias used by older components
     // local state
@@ -142,7 +152,7 @@ export function StoreProvider({ children }) {
     isSupabaseConfigured,
   }), [
     theme, toggleTheme,
-    session, authUser, authLoading, profile, profileLoading, refreshProfile,
+    session, authUser, authLoading, profile, profilePending, refreshProfile,
     user, userId, signIn, signUp, signOut,
     draft, setDraft,
     bookmarks, toggleBookmark, isBookmarked,

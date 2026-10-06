@@ -1,144 +1,146 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Clock, Bookmark, ArrowRight } from 'lucide-react';
-import { PageHead, Tag, EmptyState } from '../components/ui';
-import StoryDeck from '../components/StoryDeck';
-import '../news-deck.css';
+import { Bookmark, ExternalLink, Layers, LayoutList, Clock, Newspaper } from 'lucide-react';
+import { EmptyState } from '../components/ui';
+import SwipeDeck from '../components/news/SwipeDeck';
+import NewsCover, { topicOf } from '../components/news/NewsCover';
 import { Directory, NewsLive } from '../lib/api';
 import { timeAgo } from '../lib/format';
 import { useStore } from '../store/store';
+import './news.css';
 
-const FILTERS = ['all', 'Industry', 'Pop culture', 'Events'];
+const MODE_KEY = 'strings.newsMode';
+const TOPICS = ['All', 'Live music', 'Industry', 'New music', 'Pop culture'];
 
-function readTime(body) {
-  const words = (body || '').split(/\s+/).filter(Boolean).length;
-  return Math.max(1, Math.round(words / 200));
+/* Normalise both feeds into one card shape. */
+function fromLive(n, i) {
+  return {
+    id: `live:${n.id || n.url || i}`,
+    rawId: n.id || n.url,
+    title: n.title || 'Untitled story',
+    excerpt: n.excerpt || '',
+    url: n.url,
+    source: n.source || 'Live feed',
+    publishedAt: n.publishedAt || n.published_at || null,
+    image: n.image || '',
+    isLive: true,
+  };
+}
+function fromArticle(a) {
+  return {
+    id: `art:${a.id}`,
+    rawId: a.id,
+    title: a.title,
+    excerpt: a.excerpt || '',
+    body: a.body,
+    category: a.category,
+    source: a.author?.name || 'Strings newsroom',
+    publishedAt: a.publishedAt || a.createdAt,
+    image: '',
+    isLive: false,
+  };
 }
 
 export default function News() {
-  const [filter, setFilter] = useState('all');
+  const navigate = useNavigate();
+  const { isBookmarked, toggleBookmark, pushToast } = useStore();
+  const [mode, setMode] = useState(() => {
+    try { return localStorage.getItem(MODE_KEY) || 'swipe'; } catch { return 'swipe'; }
+  });
+  const [topic, setTopic] = useState('All');
+  const [live, setLive] = useState([]);
   const [articles, setArticles] = useState([]);
+  const [updatedAt, setUpdatedAt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
-  const { isBookmarked, toggleBookmark, pushToast } = useStore();
-  const navigate = useNavigate();
+
+  useEffect(() => { try { localStorage.setItem(MODE_KEY, mode); } catch { /* ignore */ } }, [mode]);
 
   useEffect(() => {
-    let cancelled = false;
+    let off = false;
     setLoading(true);
     setError('');
-    Directory.articles(filter === 'all' ? {} : { category: filter })
-      .then((data) => {
-        if (!cancelled) setArticles(data.items || []);
-      })
-      .catch((e) => {
-        if (!cancelled) setError(e.message || 'Could not load stories.');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [filter, reloadKey]);
-
-  const [featured, ...rest] = articles;
-
-  // Live headlines served by the backend (cached, refreshed every 6h).
-  // Fails quiet — the section hides and the newsroom articles below still work.
-  const [liveItems, setLiveItems] = useState([]);
-  const [liveUpdatedAt, setLiveUpdatedAt] = useState(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    NewsLive.get()
-      .then((data) => {
-        if (!cancelled) {
-          setLiveItems(data.items || []);
-          setLiveUpdatedAt(data.updatedAt || null);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLiveItems([]);
-          setLiveUpdatedAt(null);
-        }
-      });
-    return () => { cancelled = true; };
+    Promise.allSettled([NewsLive.get(), Directory.articles({ take: 40 })]).then(([l, a]) => {
+      if (off) return;
+      if (l.status === 'fulfilled') { setLive(l.value.items || []); setUpdatedAt(l.value.updatedAt || null); }
+      if (a.status === 'fulfilled') setArticles(a.value.items || []);
+      if (l.status === 'rejected' && a.status === 'rejected') setError(a.reason?.message || 'Could not load stories.');
+      setLoading(false);
+    });
+    return () => { off = true; };
   }, [reloadKey]);
 
-  const saveBtn = (a, e) => {
+  const all = useMemo(() => {
+    const seen = new Set();
+    const merged = [...live.map(fromLive), ...articles.map(fromArticle)];
+    return merged.filter((it) => {
+      const k = it.title.toLowerCase().slice(0, 60);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }, [live, articles]);
+
+  const items = useMemo(
+    () => (topic === 'All' ? all : all.filter((it) => topicOf(it) === topic)),
+    [all, topic],
+  );
+
+  const kindOf = (it) => (it.isLive ? 'live' : 'article');
+  const isSaved = useCallback((it) => isBookmarked(kindOf(it), it.rawId), [isBookmarked]);
+  const snapshot = (it) => ({ title: it.title, url: it.url, source: it.source, publishedAt: it.publishedAt });
+  const save = useCallback((it) => {
+    toggleBookmark(kindOf(it), it.rawId, it.isLive ? snapshot(it) : undefined);
+  }, [toggleBookmark]);
+  const unsave = useCallback((it) => { if (isBookmarked(kindOf(it), it.rawId)) toggleBookmark(kindOf(it), it.rawId); }, [isBookmarked, toggleBookmark]);
+  const read = useCallback((it) => {
+    if (it.isLive) window.open(it.url, '_blank', 'noopener,noreferrer');
+    else navigate(`/news/${it.rawId}`);
+  }, [navigate]);
+
+  const toggleSaveList = (e, it) => {
     e.stopPropagation();
-    const s = toggleBookmark('article', a.id);
-    pushToast(s ? 'Article saved.' : 'Removed from saved.');
+    const now = toggleBookmark(kindOf(it), it.rawId, it.isLive ? snapshot(it) : undefined);
+    pushToast(now ? 'Saved for later.' : 'Removed from saved.');
   };
 
-  const card = (a, isFeatured) => {
-    const saved = isBookmarked('article', a.id);
-    const authorName = a.author?.name || 'Strings newsroom';
-    return (
-      <div
-        key={a.id}
-        className="article-card"
-        onClick={() => navigate(`/news/${a.id}`)}
-        style={isFeatured ? { borderColor: 'var(--blue)', background: 'linear-gradient(180deg, var(--blue-dim), var(--panel) 60%)' } : undefined}
-      >
-        <div className="post-tags">
-          {a.category && <Tag color="blue">{a.category}</Tag>}
-          <span style={{ fontSize: 11.5, color: 'var(--text-faint)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <Clock size={11} /> {timeAgo(a.publishedAt || a.createdAt)}
-          </span>
-          {isFeatured && <Tag color="indigo">★ Star story</Tag>}
-        </div>
-        <h4 style={{ fontSize: isFeatured ? 19 : 16, margin: '10px 0 8px' }}>{a.title}</h4>
-        {a.excerpt && <p style={{ color: 'var(--text-dim)', fontSize: 13.5, lineHeight: 1.6 }}>{a.excerpt}</p>}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-          <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>By {authorName} · {readTime(a.body)} min read</span>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-ghost btn-xs" onClick={(e) => saveBtn(a, e)}>
-              <Bookmark size={13} fill={saved ? 'var(--amber)' : 'none'} color={saved ? 'var(--amber)' : undefined} /> {saved ? 'Saved' : 'Save'}
-            </button>
-            <button className="btn btn-blue btn-xs">Read <ArrowRight size={13} /></button>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const [hero, ...rest] = items;
 
   return (
-    <div>
-      <PageHead title="News" sub="Today's Indian music-industry headlines, published daily by the Strings newsroom." />
-      {liveItems.length > 0 && (
-        <section style={{ margin: '18px 0 6px' }}>
-          <h4 style={{ fontSize: 13, color: 'var(--text-dim)', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            Story Deck
-            <Tag color="indigo">Swipe through</Tag>
-            <span style={{ fontWeight: 400, color: 'var(--text-faint)' }}>{liveItems.length} headlines</span>
-            {liveUpdatedAt && (
-              <span style={{ fontWeight: 400, color: 'var(--text-faint)' }}>
-                · Updated {timeAgo(liveUpdatedAt)} · refreshes every 6 hours
-              </span>
-            )}
-          </h4>
-          <StoryDeck items={liveItems} />
-        </section>
-      )}
-      <div className="filter-row">
-        {FILTERS.map((f) => (
-          <button key={f} className={`filter-chip${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>
-            {f === 'all' ? 'All' : f}
+    <div className="news-page">
+      <header className="news-head">
+        <div>
+          <span className="news-kicker"><span className="dot" /> Strings Daily</span>
+          <h1>Today in Indian music</h1>
+          <p>
+            {all.length} stories{updatedAt ? ` · updated ${timeAgo(updatedAt)}` : ''} · swipe right to save, left to pass
+          </p>
+        </div>
+        <div className="news-mode" role="tablist" aria-label="View">
+          <button role="tab" aria-selected={mode === 'swipe'} className={mode === 'swipe' ? 'on' : ''} onClick={() => setMode('swipe')}>
+            <Layers size={15} /> Swipe
           </button>
-        ))}
+          <button role="tab" aria-selected={mode === 'list'} className={mode === 'list' ? 'on' : ''} onClick={() => setMode('list')}>
+            <LayoutList size={15} /> List
+          </button>
+        </div>
+      </header>
+
+      <div className="news-topics">
+        {TOPICS.map((t) => {
+          const n = t === 'All' ? all.length : all.filter((it) => topicOf(it) === t).length;
+          if (t !== 'All' && n === 0) return null;
+          return (
+            <button key={t} className={`filter-chip${topic === t ? ' active' : ''}`} onClick={() => setTopic(t)}>
+              {t} <span className="news-topic-n">{n}</span>
+            </button>
+          );
+        })}
       </div>
+
       {loading ? (
-        <>
-          {[0, 1, 2].map((i) => (
-            <div className="skel-card" key={i}>
-              <div className="skel-line shimmer-strip" style={{ width: '40%' }} />
-              <div className="skel-line shimmer-strip" style={{ width: '85%' }} />
-              <div className="skel-line shimmer-strip" style={{ width: '60%' }} />
-            </div>
-          ))}
-        </>
+        <div className="deck-skel shimmer-strip" />
       ) : error ? (
         <EmptyState
           icon={<Clock size={22} />}
@@ -146,14 +148,67 @@ export default function News() {
           text={error}
           action={<button className="btn btn-blue btn-sm" onClick={() => setReloadKey((k) => k + 1)}>Retry</button>}
         />
-      ) : articles.length === 0 ? (
-        <EmptyState icon={<Clock size={22} />} title="No stories here" text="Try a different category — new stories land here daily." />
+      ) : items.length === 0 ? (
+        <EmptyState icon={<Newspaper size={22} />} title="No stories here" text="Try a different topic — new stories land every few hours." />
+      ) : mode === 'swipe' ? (
+        <SwipeDeck
+          key={topic}
+          items={items}
+          isSaved={isSaved}
+          onSave={(it) => { save(it); }}
+          onUnsave={unsave}
+          onRead={read}
+          onSwitchToList={() => setMode('list')}
+        />
       ) : (
-        <>
-          {featured && card(featured, true)}
-          {rest.map((a) => card(a, false))}
-        </>
+        <div className="news-list">
+          {hero && (
+            <article className="news-hero" onClick={() => read(hero)}>
+              <NewsCover item={hero} large />
+              <div className="news-hero-text">
+                <span className="news-pill">{topicOf(hero)}</span>
+                <h2>{hero.title}</h2>
+                {hero.excerpt && <p>{hero.excerpt.replace(/\s*The post .*appeared first on .*$/, '')}</p>}
+                <div className="news-row-meta">
+                  <span>{hero.source}{hero.publishedAt ? ` · ${timeAgo(hero.publishedAt)}` : ''}</span>
+                  <SaveBtn it={hero} saved={isSaved(hero)} onClick={toggleSaveList} light />
+                </div>
+              </div>
+            </article>
+          )}
+          <div className="news-grid">
+            {rest.map((it) => (
+              <article key={it.id} className="news-tile" onClick={() => read(it)}>
+                <div className="news-tile-cover"><NewsCover item={it} /></div>
+                <div className="news-tile-body">
+                  <span className="news-pill subtle">{topicOf(it)}</span>
+                  <h3>{it.title}</h3>
+                  <div className="news-row-meta">
+                    <span>
+                      {it.source}{it.publishedAt ? ` · ${timeAgo(it.publishedAt)}` : ''}
+                      {it.isLive && <ExternalLink size={11} style={{ marginLeft: 4, verticalAlign: -1 }} />}
+                    </span>
+                    <SaveBtn it={it} saved={isSaved(it)} onClick={toggleSaveList} />
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
       )}
     </div>
+  );
+}
+
+function SaveBtn({ it, saved, onClick, light }) {
+  return (
+    <button
+      className={`news-save${saved ? ' on' : ''}${light ? ' light' : ''}`}
+      onClick={(e) => onClick(e, it)}
+      aria-label={saved ? 'Remove from saved' : 'Save for later'}
+      aria-pressed={saved}
+    >
+      <Bookmark size={15} fill={saved ? 'currentColor' : 'none'} />
+    </button>
   );
 }

@@ -51,6 +51,9 @@ router.post(
     if (!body || typeof body !== 'string' || !body.trim()) {
       return bad(res, 400, 'Field "body" is required.');
     }
+    if (mediaUrl != null && (typeof mediaUrl !== 'string' || !/^https:\/\//.test(mediaUrl) || mediaUrl.length > 1000)) {
+      return bad(res, 400, 'Field "mediaUrl" must be an https URL.');
+    }
     if (visibility !== undefined && !POST_VISIBILITIES.includes(visibility)) {
       return bad(res, 400, `Field "visibility" must be one of: ${POST_VISIBILITIES.join(', ')}`);
     }

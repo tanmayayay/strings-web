@@ -1,13 +1,12 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, Repeat2, Bookmark, Send } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Heart, MessageCircle, Repeat2, Bookmark, Send, Share2, MoreHorizontal, EyeOff, Link2, UserPlus, Check } from 'lucide-react';
 import { Avatar, Verified } from './ui';
-import Lightbox from './Lightbox';
 import { useStore } from '../store/store';
-import { Posts } from '../lib/api';
-
-const TAG_SPLIT_RE = /(#[\p{L}\p{N}_]+)/gu;
-const TAG_TEST_RE = /#[\p{L}\p{N}_]+/u;
+import { Posts, Profiles } from '../lib/api';
+import { hashStr } from '../data/demo';
+import './postcard.css';
 
 function timeAgo(iso) {
   const t = new Date(iso).getTime();
@@ -28,114 +27,92 @@ function typeLabel(t) {
   return t.charAt(0) + t.slice(1).toLowerCase();
 }
 
-/** Render #hashtags as styled blue spans (no navigation). */
-function renderRich(text) {
-  if (!text) return null;
-  return String(text)
-    .split(TAG_SPLIT_RE)
-    .map((part, i) =>
-      TAG_TEST_RE.test(part) ? (
-        <span key={i} className="post-tag">{part}</span>
-      ) : (
-        <Fragment key={i}>{part}</Fragment>
-      )
-    );
+/* Brand-safe gradients for text-only "quote card" posts. Chosen
+   deterministically from the post id so a post always looks the same. */
+const CANVASES = [
+  'linear-gradient(135deg,#0E2E6B 0%,#2A63EE 55%,#0EA5E9 100%)',
+  'linear-gradient(135deg,#1F1147 0%,#4F46E5 55%,#A855F7 100%)',
+  'linear-gradient(135deg,#3B0D2E 0%,#BE185D 50%,#F97316 100%)',
+  'linear-gradient(135deg,#052E2B 0%,#0F766E 55%,#22C55E 100%)',
+  'linear-gradient(135deg,#111827 0%,#334155 50%,#64748B 100%)',
+  'linear-gradient(135deg,#431407 0%,#C2410C 50%,#FBBF24 100%)',
+];
+
+/* Short, single-thought posts become visual cards; long ones stay as text. */
+function isQuoteCard(post) {
+  const b = (post.body || '').trim();
+  return !post.mediaUrl && b.length > 0 && b.length <= 200 && b.split('\n').length <= 4;
 }
 
-export default function PostCard({ post, onLike }) {
+/* Render #hashtags and @mentions as highlighted inline tokens. */
+function RichText({ text }) {
+  const parts = String(text || '').split(/(\s+)/);
+  return parts.map((p, i) => (/^[#@][\p{L}\p{N}_]+/u.test(p)
+    ? <span key={i} className="pc-tag">{p}</span>
+    : p));
+}
+
+export default function PostCard({ post, onLike, onHide, following, onFollowChange }) {
   const { user, isBookmarked, toggleBookmark, pushToast } = useStore();
   const navigate = useNavigate();
   const [liked, setLiked] = useState(false);
   const [likeDelta, setLikeDelta] = useState(0);
   const [likeBusy, setLikeBusy] = useState(false);
-  const [pop, setPop] = useState(false);
+  const [burst, setBurst] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [comments, setComments] = useState(null);
   const [commentDraft, setCommentDraft] = useState('');
   const [commentCount, setCommentCount] = useState(post._count?.comments ?? 0);
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [burst, setBurst] = useState(null);
-  const clickTimer = useRef(null);
-  const burstTimer = useRef(null);
-  const popTimer = useRef(null);
-
-  useEffect(() => () => {
-    clearTimeout(clickTimer.current);
-    clearTimeout(burstTimer.current);
-    clearTimeout(popTimer.current);
-  }, []);
+  const [expanded, setExpanded] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgFailed, setImgFailed] = useState(false);
+  const lastTap = useRef(0);
 
   const author = post.author || {};
+  const isMine = user && author.id === user.id;
   const likeCount = (post._count?.likes ?? 0) + likeDelta;
   const saved = isBookmarked('post', post.id);
+  const quote = isQuoteCard(post) || (post.mediaUrl && imgFailed && (post.body || '').length <= 200);
+  const canvas = CANVASES[hashStr(post.id || post.body || 'x') % CANVASES.length];
+  const longBody = (post.body || '').length > 280;
 
   const openProfile = () => { if (author.id) navigate(`/profile/${author.id}`); };
 
-  const triggerPop = () => {
-    clearTimeout(popTimer.current);
-    setPop(false);
-    requestAnimationFrame(() => setPop(true));
-    popTimer.current = setTimeout(() => setPop(false), 420);
-  };
-
-  const toggleLike = async () => {
-    if (likeBusy) return;
+  const setLike = async (want) => {
+    if (likeBusy || want === liked) return;
     if (!user) { pushToast('Sign in to like posts.', 'error'); return; }
     const prevLiked = liked;
     const prevDelta = likeDelta;
     setLikeBusy(true);
-    if (!liked) {
-      setLiked(true);
-      setLikeDelta(prevDelta + 1);
-      triggerPop();
-      try {
-        await Posts.like(post.id);
-        onLike?.(post.id, true);
-      } catch (e) {
-        if (e.status === 409) {
-          // Already liked server-side: the liked state is correct, just drop the optimistic +1.
-          setLikeDelta(prevDelta);
-          onLike?.(post.id, true);
-        } else {
-          setLiked(prevLiked);
-          setLikeDelta(prevDelta);
-          pushToast(e.message || 'Could not like the post.', 'error');
-        }
-      }
-    } else {
-      setLiked(false);
-      setLikeDelta(prevDelta - 1);
-      try {
-        await Posts.unlike(post.id);
-        onLike?.(post.id, false);
-      } catch (e) {
+    setLiked(want);
+    setLikeDelta(prevDelta + (want ? 1 : -1));
+    try {
+      if (want) await Posts.like(post.id);
+      else await Posts.unlike(post.id);
+      onLike?.(post.id, want);
+    } catch (e) {
+      if (want && e.status === 409) {
+        setLikeDelta(prevDelta); // already liked server-side
+      } else {
         setLiked(prevLiked);
         setLikeDelta(prevDelta);
-        pushToast(e.message || 'Could not remove the like.', 'error');
+        pushToast(e.message || 'Could not update the like.', 'error');
       }
     }
     setLikeBusy(false);
   };
 
-  /* Single click opens the lightbox (slightly delayed so a double-click
-     can claim the gesture); double-click bursts a heart and likes. */
-  const handleMediaClick = () => {
-    clearTimeout(clickTimer.current);
-    clickTimer.current = setTimeout(() => setLightboxOpen(true), 260);
-  };
-
-  const handleMediaDoubleClick = (e) => {
-    clearTimeout(clickTimer.current);
-    const rect = e.currentTarget.getBoundingClientRect();
-    setBurst({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-      id: Date.now(),
-    });
-    clearTimeout(burstTimer.current);
-    burstTimer.current = setTimeout(() => setBurst(null), 780);
-    if (!liked && !likeBusy) toggleLike();
-    else triggerPop();
+  /* Instagram-style double-tap on the media to like. */
+  const onMediaTap = () => {
+    const now = Date.now();
+    if (now - lastTap.current < 320) {
+      setBurst((b) => b + 1);
+      setLike(true);
+      lastTap.current = 0;
+    } else {
+      lastTap.current = now;
+    }
   };
 
   const toggleComments = async () => {
@@ -165,101 +142,191 @@ export default function PostCard({ post, onLike }) {
     }
   };
 
+  const shareLink = `${window.location.origin}${window.location.pathname}#/profile/${author.id || ''}`;
+  const share = async () => {
+    const text = `${author.name || 'Someone'} on Strings: “${(post.body || '').slice(0, 120)}”`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Strings', text, url: shareLink });
+        return;
+      }
+      await navigator.clipboard.writeText(`${text}\n${shareLink}`);
+      pushToast('Link copied — paste it anywhere.');
+    } catch { /* share sheet dismissed */ }
+  };
+
+  const follow = async () => {
+    if (!user) { pushToast('Sign in to follow people.', 'error'); return; }
+    try {
+      if (following) await Profiles.unfollow(author.id);
+      else await Profiles.follow(author.id);
+      onFollowChange?.(author.id, !following);
+      pushToast(following ? `Unfollowed ${author.name}.` : `Following ${author.name}.`);
+    } catch (e) {
+      if (e.status === 409) onFollowChange?.(author.id, true);
+      else pushToast(e.message || 'Could not update follow.', 'error');
+    }
+  };
+
+  const heartBurst = (
+    <AnimatePresence>
+      {burst > 0 && (
+        <motion.span
+          key={burst}
+          className="pc-burst"
+          initial={{ scale: 0.2, opacity: 0 }}
+          animate={{ scale: [0.2, 1.25, 1], opacity: [0, 1, 1] }}
+          exit={{ scale: 1.4, opacity: 0 }}
+          transition={{ duration: 0.45 }}
+          onAnimationComplete={() => setTimeout(() => setBurst(0), 380)}
+        >
+          <Heart size={84} fill="#fff" strokeWidth={0} />
+        </motion.span>
+      )}
+    </AnimatePresence>
+  );
+
   return (
-    <div className="post-card">
-      <div className="post-head">
-        <span onClick={openProfile} style={{ cursor: author.id ? 'pointer' : 'default' }}>
-          <Avatar name={author.name || 'Unknown'} size={38} />
-        </span>
-        <div className="who" onClick={openProfile}>
-          <b>{author.name || 'Unknown'}{author.verificationStatus === 'VERIFIED' && <Verified />}</b>
+    <article className="pc">
+      <header className="pc-head">
+        <button className="pc-avatar" onClick={openProfile} aria-label={`Open ${author.name || 'author'}'s profile`}>
+          <Avatar name={author.name || 'Unknown'} size={40} />
+        </button>
+        <div className="pc-who" onClick={openProfile}>
+          <b>{author.name || 'Unknown'}{author.verificationStatus === 'VERIFIED' && <Verified size={14} />}</b>
           <span>{typeLabel(author.stakeholderType)}{author.city ? ` · ${author.city}` : ''} · {timeAgo(post.createdAt)}</span>
         </div>
-      </div>
-      <div className="post-body">{renderRich(post.body)}</div>
-      {post.mediaUrl && (
-        <div
-          className="post-media"
-          role="button"
-          tabIndex={0}
-          aria-label="View post media"
-          onClick={handleMediaClick}
-          onDoubleClick={handleMediaDoubleClick}
-          onKeyDown={(e) => { if (e.key === 'Enter') setLightboxOpen(true); }}
-        >
-          <img src={post.mediaUrl} alt="" />
-          {burst && (
-            <span className="heart-burst" key={burst.id} style={{ left: burst.x, top: burst.y }}>
-              <Heart size={64} fill="currentColor" strokeWidth={0} />
-            </span>
+        {!isMine && author.id && onFollowChange && (
+          <button className={`pc-follow${following ? ' on' : ''}`} onClick={follow}>
+            {following ? <><Check size={13} /> Following</> : <><UserPlus size={13} /> Follow</>}
+          </button>
+        )}
+        <div className="pc-menu-wrap">
+          <button className="pc-icon" onClick={() => setMenu((m) => !m)} aria-label="More options" aria-expanded={menu}>
+            <MoreHorizontal size={18} />
+          </button>
+          {menu && (
+            <>
+              <div className="pc-menu-scrim" onClick={() => setMenu(false)} />
+              <div className="pc-menu" role="menu">
+                <button role="menuitem" onClick={() => { setMenu(false); navigator.clipboard?.writeText(shareLink); pushToast('Profile link copied.'); }}>
+                  <Link2 size={15} /> Copy link
+                </button>
+                {onHide && !isMine && (
+                  <button role="menuitem" onClick={() => { setMenu(false); onHide(post.id); }}>
+                    <EyeOff size={15} /> Not interested
+                  </button>
+                )}
+              </div>
+            </>
           )}
         </div>
+      </header>
+
+      {/* caption above media, like LinkedIn — keeps context before the image */}
+      {!quote && post.body && (
+        <div className={`pc-body${longBody && !expanded ? ' clamp' : ''}`}>
+          <RichText text={post.body} />
+        </div>
       )}
-      <div className="post-actions">
-        <button className={`post-action${liked ? ' liked' : ''}${pop ? ' pop' : ''}`} onClick={toggleLike} aria-label="Like">
-          <Heart size={15} fill={liked ? 'currentColor' : 'none'} /> {likeCount}
+      {!quote && longBody && !expanded && (
+        <button className="pc-more" onClick={() => setExpanded(true)}>…see more</button>
+      )}
+
+      {post.mediaUrl && !imgFailed && (
+        <div className={`pc-media${imgLoaded ? ' ready' : ''}`} onClick={onMediaTap}>
+          <img
+            src={post.mediaUrl}
+            alt={post.body ? `Photo: ${post.body.slice(0, 80)}` : 'Post photo'}
+            loading="lazy"
+            onLoad={() => setImgLoaded(true)}
+            onError={() => setImgFailed(true)}
+            draggable={false}
+          />
+          {heartBurst}
+        </div>
+      )}
+
+      {quote && (
+        <div className="pc-quote" style={{ background: canvas }} onClick={onMediaTap}>
+          <p className={(post.body || '').length > 110 ? 'sm' : ''}><RichText text={post.body} /></p>
+          <span className="pc-quote-by">— {author.name || 'Strings member'}</span>
+          {heartBurst}
+        </div>
+      )}
+
+      <div className="pc-actions">
+        <motion.button
+          whileTap={{ scale: 0.8 }}
+          className={`pc-act${liked ? ' liked' : ''}`}
+          onClick={() => setLike(!liked)}
+          aria-label={liked ? 'Unlike' : 'Like'}
+          aria-pressed={liked}
+        >
+          <Heart size={20} fill={liked ? 'currentColor' : 'none'} />
+        </motion.button>
+        <button className="pc-act" onClick={toggleComments} aria-label="Comments" aria-expanded={commentsOpen}>
+          <MessageCircle size={20} />
         </button>
-        <button className="post-action" onClick={toggleComments} aria-label="Comments">
-          <MessageCircle size={15} /> {commentCount}
+        <button className="pc-act" onClick={() => pushToast('Reposted to your network.')} aria-label="Repost">
+          <Repeat2 size={20} />
         </button>
-        <button className="post-action" onClick={() => pushToast('Reposted to your network.')} aria-label="Repost">
-          <Repeat2 size={15} /> Repost
+        <button className="pc-act" onClick={share} aria-label="Share">
+          <Share2 size={19} />
         </button>
-        <button
-          className={`post-action${saved ? ' saved' : ''}`}
-          style={{ marginLeft: 'auto' }}
+        <motion.button
+          whileTap={{ scale: 0.8 }}
+          className={`pc-act pc-save${saved ? ' saved' : ''}`}
           onClick={() => {
             const nowSaved = toggleBookmark('post', post.id);
-            pushToast(nowSaved ? 'Saved to your bookmarks.' : 'Removed from bookmarks.');
+            pushToast(nowSaved ? 'Saved to your collection.' : 'Removed from saved.');
           }}
-          aria-label="Save"
+          aria-label={saved ? 'Remove from saved' : 'Save'}
+          aria-pressed={saved}
         >
-          <Bookmark size={15} fill={saved ? 'currentColor' : 'none'} /> {saved ? 'Saved' : 'Save'}
-        </button>
+          <Bookmark size={20} fill={saved ? 'currentColor' : 'none'} />
+        </motion.button>
       </div>
+      <div className="pc-stats">
+        <b>{likeCount.toLocaleString('en-IN')} {likeCount === 1 ? 'like' : 'likes'}</b>
+        {commentCount > 0 && (
+          <button onClick={toggleComments}>View {commentCount === 1 ? '1 comment' : `all ${commentCount} comments`}</button>
+        )}
+      </div>
+
       {commentsOpen && (
-        <div style={{ borderTop: '1px solid var(--border-soft)', marginTop: 10, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {comments === null && (
-            <span style={{ fontSize: 12.5, color: 'var(--text-faint)' }}>Loading comments…</span>
-          )}
-          {comments !== null && comments.length === 0 && (
-            <span style={{ fontSize: 12.5, color: 'var(--text-faint)' }}>No comments yet — start the conversation.</span>
-          )}
+        <div className="pc-comments">
+          {comments === null && <span className="pc-faint">Loading comments…</span>}
+          {comments !== null && comments.length === 0 && <span className="pc-faint">No comments yet — start the conversation.</span>}
           {(comments || []).map((c) => (
-            <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <div key={c.id} className="pc-comment">
               <Avatar name={c.author?.name || 'Unknown'} size={28} />
-              <div style={{ fontSize: 13 }}>
-                <b style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div>
+                <b>
                   {c.author?.name || 'Unknown'}
                   {c.author?.verificationStatus === 'VERIFIED' && <Verified size={12} />}
+                  <span className="pc-faint"> · {timeAgo(c.createdAt)}</span>
                 </b>
-                <div style={{ lineHeight: 1.5 }}>{c.body}</div>
-                <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{timeAgo(c.createdAt)}</span>
+                <div>{c.body}</div>
               </div>
             </div>
           ))}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div className="pc-comment-input">
+            <Avatar name={user?.name || 'You'} size={28} />
             <input
               type="text"
               value={commentDraft}
               onChange={(e) => setCommentDraft(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && addComment()}
-              placeholder="Write a comment…"
-              style={{ flex: 1, background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', fontSize: 13, color: 'var(--text)' }}
+              placeholder="Add a comment…"
+              aria-label="Write a comment"
             />
-            <button className="btn btn-blue btn-sm" onClick={addComment} aria-label="Send comment">
-              <Send size={13} />
+            <button onClick={addComment} disabled={!commentDraft.trim()} aria-label="Send comment">
+              <Send size={15} />
             </button>
           </div>
         </div>
       )}
-      {lightboxOpen && post.mediaUrl && (
-        <Lightbox
-          items={[{ src: post.mediaUrl, alt: (post.body || '').slice(0, 120) || 'Post media' }]}
-          index={0}
-          onClose={() => setLightboxOpen(false)}
-        />
-      )}
-    </div>
+    </article>
   );
 }

@@ -87,7 +87,14 @@ function LandingGate() {
 
 function AppShell() {
   const [palette, setPalette] = useState(false);
-  const [modal, setModal] = useState(null); // 'post' | 'opp' | null
+  const [modal, setModal] = useState(null); // { type: 'post' | 'opp', photo?, prefill? } | null
+  // Called from buttons (receives a click event) or with options.
+  const openPost = useCallback((o) => setModal({
+    type: 'post',
+    photo: o?.photo === true,
+    prefill: typeof o?.prefill === 'string' ? o.prefill : '',
+  }), []);
+  const openOpp = useCallback(() => setModal({ type: 'opp' }), []);
   const openPalette = useCallback(() => setPalette(true), []);
 
   // ⌘K / Ctrl+K toggles the command palette
@@ -115,8 +122,8 @@ function AppShell() {
             <RequireAuth>
               <Shell
                 onOpenPalette={openPalette}
-                onNewPost={() => setModal('post')}
-                onNewOpp={() => setModal('opp')}
+                onNewPost={openPost}
+                onNewOpp={openOpp}
               />
             </RequireAuth>
           }
@@ -142,8 +149,8 @@ function AppShell() {
       </RouteTransition>
 
       <CommandPalette open={palette} onClose={() => setPalette(false)} />
-      {modal === 'post' && <PostModal onClose={() => setModal(null)} />}
-      {modal === 'opp' && <OppModal onClose={() => setModal(null)} />}
+      {modal?.type === 'post' && <PostModal startWithPhoto={modal.photo} prefill={modal.prefill} onClose={() => setModal(null)} />}
+      {modal?.type === 'opp' && <OppModal onClose={() => setModal(null)} />}
       <Toasts />
     </>
   );

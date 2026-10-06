@@ -1,51 +1,59 @@
 import { useEffect, useRef, useState } from 'react';
-import { Modal } from './ui';
-import { useStore } from '../store/store';
+import { Image as ImageIcon } from 'lucide-react';
+import { Modal, Avatar } from './ui';
 import { supabase } from '../lib/supabase';
+import { useStore } from '../store/store';
 import { CITIES } from '../data/demo';
 import { Posts, Opps } from '../lib/api';
-import { Image as ImageIcon, X, Loader2 } from 'lucide-react';
+import './postcard.css';
 
-const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
+/* Post composer — text + optional photo.
+   Photos are downscaled on-device (max 1600px, JPEG) before upload, which
+   keeps posts fast on mobile data, then stored in the public `post-media`
+   Supabase bucket (see backend/post-media-storage.sql). */
+const MAX_INPUT_BYTES = 15 * 1024 * 1024;
 
-/* Post composer */
-export function PostModal({ onClose }) {
-  const { user, pushToast } = useStore();
-  const [body, setBody] = useState('');
+async function downscale(file, maxDim = 1600, quality = 0.85) {
+  if (file.type === 'image/gif') return file; // keep animation
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  if (!bitmap) return file;
+  const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', quality));
+  return blob ? new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : file;
+}
+
+export function PostModal({ onClose, startWithPhoto = false, prefill = '' }) {
+  const { user, authUser, pushToast } = useStore();
+  const [body, setBody] = useState(prefill);
   const [saving, setSaving] = useState(false);
   const [file, setFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const fileRef = useRef(null);
+  const [preview, setPreview] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInput = useRef(null);
 
-  // Revoke the preview object URL whenever it is replaced or the modal
-  // unmounts, so repeated photo picks don't leak memory.
-  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+  useEffect(() => {
+    if (startWithPhoto) fileInput.current?.click();
+  }, [startWithPhoto]);
 
-  const pickPhoto = (e) => {
-    const f = e.target.files && e.target.files[0];
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+
+  const pick = (f) => {
     if (!f) return;
-    if (!f.type.startsWith('image/')) {
-      pushToast('Please choose an image file.', 'error');
+    if (!/^image\/(jpeg|png|webp|gif|heic|heif)$/.test(f.type)) {
+      pushToast('Please choose a JPG, PNG, WebP or GIF image.', 'error');
       return;
     }
-    if (f.size > MAX_PHOTO_BYTES) {
-      pushToast('Photos must be 5 MB or smaller.', 'error');
+    if (f.size > MAX_INPUT_BYTES) {
+      pushToast('That image is over 15 MB — please pick a smaller one.', 'error');
       return;
     }
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
     setFile(f);
-    setPreviewUrl(URL.createObjectURL(f));
+    setPreview(URL.createObjectURL(f));
   };
-
-  const clearPhoto = () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setFile(null);
-    setPreviewUrl(null);
-    if (fileRef.current) fileRef.current.value = '';
-  };
-
-  const isMissingBucket = (e) =>
-    e && (e.statusCode === '404' || /bucket not found/i.test(e.message || ''));
 
   const publish = async () => {
     if (!body.trim() && !file) { onClose(); return; }
@@ -54,26 +62,22 @@ export function PostModal({ onClose }) {
     try {
       let mediaUrl = null;
       if (file) {
-        const rawExt = (file.name.split('.').pop() || 'jpg').toLowerCase();
-        const ext = rawExt.replace(/[^a-z0-9]/g, '') || 'jpg';
-        const path = `${user.id}/${Date.now()}.${ext}`;
-        const { error } = await supabase.storage.from('post-media').upload(path, file);
-        if (error) throw error;
+        const small = await downscale(file);
+        const ext = small.type === 'image/gif' ? 'gif' : 'jpg';
+        const path = `${authUser?.id || user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const { error } = await supabase.storage.from('post-media').upload(path, small, {
+          contentType: small.type, cacheControl: '31536000',
+        });
+        if (error) throw new Error('Photo upload failed — the post-media storage bucket may not be set up yet.');
         mediaUrl = supabase.storage.from('post-media').getPublicUrl(path).data.publicUrl;
       }
-      await Posts.create({ body: body.trim(), mediaUrl });
+      // The backend requires a body; a photo-only post gets a light caption.
+      await Posts.create({ body: body.trim() || '📸', mediaUrl });
       window.dispatchEvent(new Event('strings:post-created'));
       onClose();
       pushToast('Posted.');
     } catch (e) {
-      // An upload failure never publishes the post — a broken-image post
-      // is worse than a rejected one.
-      pushToast(
-        file && isMissingBucket(e)
-          ? 'Photo upload failed — the post-media bucket may not exist yet. Run supabase/post-media-storage.sql in the Supabase SQL editor.'
-          : (e.message || 'Could not publish the post.'),
-        'error'
-      );
+      pushToast(e.message || 'Could not publish the post.', 'error');
     } finally {
       setSaving(false);
     }
@@ -81,40 +85,52 @@ export function PostModal({ onClose }) {
 
   return (
     <Modal title="Create a post" onClose={onClose}>
-      <style>{`@keyframes post-spinner-spin{to{transform:rotate(360deg);}}`}</style>
-      <label>Post</label>
-      <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Share news, a call-out, or what you're working on…" />
-      {previewUrl && (
-        <div style={{ position: 'relative', marginTop: 12, maxWidth: 220 }}>
-          <img src={previewUrl} alt="Photo attached to your post" style={{ display: 'block', width: '100%', borderRadius: 10 }} />
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={clearPhoto}
-            aria-label="Remove photo"
-            disabled={saving}
-            style={{ position: 'absolute', top: 6, right: 6, padding: 4, lineHeight: 0, background: 'rgba(0,0,0,.55)', color: '#fff', borderRadius: '50%', minWidth: 0 }}
-          >
-            <X size={14} />
-          </button>
+      <div className="pm-author">
+        <Avatar name={user?.name || 'You'} size={38} />
+        <div><b>{user?.name}</b><span>Posting publicly</span></div>
+      </div>
+      <textarea
+        className="pm-text"
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        placeholder="Share a gig moment, a call-out, or what you're working on… use #tags to get discovered"
+        maxLength={2000}
+        autoFocus={!startWithPhoto}
+        aria-label="Post text"
+      />
+      {preview ? (
+        <div className="pm-preview">
+          <img src={preview} alt="Selected photo preview" />
+          <button className="pm-remove" onClick={() => { setFile(null); setPreview(null); }} aria-label="Remove photo">✕</button>
+        </div>
+      ) : (
+        <div
+          className={`pm-drop${dragOver ? ' over' : ''}`}
+          onClick={() => fileInput.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); pick(e.dataTransfer.files?.[0]); }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && fileInput.current?.click()}
+        >
+          <ImageIcon size={22} />
+          <b>Add a photo</b>
+          <span>Drag & drop or click — posts with photos get far more reach</span>
         </div>
       )}
-      <div className="modal-actions" style={{ justifyContent: 'flex-start', marginTop: 14 }}>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => fileRef.current && fileRef.current.click()} disabled={saving}>
-          <ImageIcon size={15} style={{ marginRight: 6, verticalAlign: '-2px' }} />
-          {file ? 'Change photo' : 'Add photo'}
-        </button>
-        <input ref={fileRef} type="file" accept="image/*" onChange={pickPhoto} style={{ display: 'none' }} />
-      </div>
+      <input
+        ref={fileInput}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        hidden
+        onChange={(e) => pick(e.target.files?.[0])}
+      />
       <div className="modal-actions">
+        <span className="pm-count">{body.length}/2000</span>
         <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
-        <button className="btn btn-blue btn-sm" onClick={publish} disabled={saving}>
-          {saving ? (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Loader2 size={15} style={{ animation: 'post-spinner-spin 1s linear infinite' }} />
-              {file ? 'Uploading photo…' : 'Publishing…'}
-            </span>
-          ) : 'Publish'}
+        <button className="btn btn-blue btn-sm" onClick={publish} disabled={saving || (!body.trim() && !file)}>
+          {saving ? (file ? 'Uploading…' : 'Publishing…') : 'Publish'}
         </button>
       </div>
     </Modal>
