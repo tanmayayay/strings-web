@@ -91,6 +91,7 @@ model User {
 
   detail                  StakeholderDetail?
   posts                   Post[]
+  stories                 Story[]
   comments                Comment[]
   likes                   Like[]
   following               Connection[]         @relation("Follower")
@@ -152,6 +153,20 @@ model Post {
 
   @@index([authorId])
   @@index([createdAt])
+}
+
+// Vault: image stories that disappear 12 hours after posting.
+model Story {
+  id        String   @id @default(cuid())
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  mediaUrl  String
+  caption   String?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([authorId])
+  @@index([expiresAt])
 }
 
 model Comment {

@@ -108,6 +108,12 @@ export const Posts = {
   comment: (id, body) => api(`/api/posts/${id}/comments`, { method: 'POST', body: { body } }),
 };
 
+export const Stories = {
+  list: () => api('/api/stories', { auth: false }),
+  create: ({ mediaUrl, caption }) => api('/api/stories', { method: 'POST', body: { mediaUrl, caption } }),
+  remove: (id) => api(`/api/stories/${id}`, { method: 'DELETE' }),
+};
+
 export const Opps = {
   list: (params = {}) => api(`/api/opportunities${qs(params)}`, { auth: false }),
   get: (id) => api(`/api/opportunities/${id}`, { auth: false }),

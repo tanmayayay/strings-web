@@ -13,7 +13,7 @@ import './postcard.css';
    Supabase bucket (see backend/post-media-storage.sql). */
 const MAX_INPUT_BYTES = 15 * 1024 * 1024;
 
-async function downscale(file, maxDim = 1600, quality = 0.85) {
+export async function downscale(file, maxDim = 1600, quality = 0.85) {
   if (file.type === 'image/gif') return file; // keep animation
   const bitmap = await createImageBitmap(file).catch(() => null);
   if (!bitmap) return file;

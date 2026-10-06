@@ -8,7 +8,7 @@ import NewsPost from '../components/home/NewsPost';
 import NewsReader from '../components/news/NewsReader';
 import { topicOf } from '../components/news/NewsCover';
 import { fromLive, snapshotOf } from '../lib/news';
-import { SpotlightRail } from '../components/home/Spotlight';
+import VaultRail from '../components/home/Vault';
 import {
   MeCard, NewsCard, OppsCard, PeopleCard, NearbyCard, TrendingCard, RailFooter, OppsStrip, PeopleStrip,
 } from '../components/home/HomeRail';
@@ -214,9 +214,7 @@ export default function Home() {
           </div>
         </div>
 
-        {people.length > 0 && (
-          <SpotlightRail people={people.slice(0, 16)} me={user} onCreate={openPost} following={following} onFollow={onFollow} />
-        )}
+        <VaultRail />
 
         <div className="home-composer">
           <div className="home-composer-top">

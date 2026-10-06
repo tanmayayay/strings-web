@@ -13,6 +13,7 @@ import notificationsRouter from './routes/notifications.js';
 import tracksRouter from './routes/tracks.js';
 import groupsRouter from './routes/groups.js';
 import newsRouter from './routes/news.js';
+import storiesRouter from './routes/stories.js';
 import { isSupabaseMode, isSet } from './middleware/auth.js';
 
 const app = express();
@@ -65,6 +66,7 @@ app.use('/api/notifications', notificationsRouter);
 app.use('/api/tracks', tracksRouter);
 app.use('/api/groups', groupsRouter);
 app.use('/api/news', newsRouter);
+app.use('/api/stories', storiesRouter);
 
 // 404 for unknown /api routes.
 app.use('/api', (req, res) => {
