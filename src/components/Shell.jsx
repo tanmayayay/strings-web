@@ -49,6 +49,14 @@ export default function Shell({ onOpenPalette, onNewPost, onNewOpp }) {
   const [recent, setRecent] = useState([]);
   const navigate = useNavigate();
 
+  // Don't let the page scroll behind the open drawer.
+  useEffect(() => {
+    if (!drawer) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [drawer]);
+
   const loadNotifs = useCallback(async () => {
     try {
       const [unreadRes, allRes] = await Promise.all([
@@ -109,13 +117,11 @@ export default function Shell({ onOpenPalette, onNewPost, onNewOpp }) {
 
       {/* mobile drawer */}
       {drawer && (
-        <div className="modal-backdrop" style={{ justifyContent: 'flex-start', padding: 0 }} onClick={() => setDrawer(false)}>
-          <div className="sidebar" style={{ display: 'flex', height: '100vh', animation: 'popIn .2s' }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-              <button className="icon-btn" onClick={() => setDrawer(false)} style={{ background: 'rgba(255,255,255,.08)', borderColor: 'rgba(255,255,255,.15)', color: '#fff' }}>
-                <X size={16} />
-              </button>
-            </div>
+        <div className="drawer-backdrop" onClick={() => setDrawer(false)}>
+          <div className="sidebar drawer" role="dialog" aria-modal="true" aria-label="Menu" onClick={(e) => e.stopPropagation()}>
+            <button className="drawer-close" onClick={() => setDrawer(false)} aria-label="Close menu">
+              <X size={16} />
+            </button>
             {sidebarBody(() => setDrawer(false))}
           </div>
         </div>

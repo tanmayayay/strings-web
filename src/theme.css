@@ -681,3 +681,66 @@ img{max-width:100%; display:block;}
 .booking-row{
   display:flex; align-items:center; gap:12px;
 }
+
+/* ============================================================
+   MOBILE FIXES — messages single-pane, scrollable drawer, member rows
+============================================================ */
+.msg-back{display:none; background:none; border:none; color:var(--blue); padding:4px 2px 4px 0; margin-left:-6px; align-items:center;}
+.msg-thread-who{cursor:pointer; min-width:0;}
+.msg-thread-head{cursor:default;}
+
+.drawer-backdrop{position:fixed; inset:0; z-index:100; background:rgba(8,15,32,.5); backdrop-filter:blur(3px); animation:fadeIn .18s ease;}
+.sidebar.drawer{display:flex !important; position:absolute; left:0; top:0; bottom:0; width:min(300px,86vw); height:auto; max-height:100dvh;
+  overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; animation:slideIn .22s ease;
+  padding:calc(16px + env(safe-area-inset-top)) 14px calc(24px + env(safe-area-inset-bottom));}
+.sidebar.drawer .sidebar-foot{margin-top:auto; padding-top:14px;}
+.drawer-close{align-self:flex-end; width:34px; height:34px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+  background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.15); color:#fff; margin-bottom:2px;}
+@keyframes slideIn{from{transform:translateX(-24px); opacity:0}to{transform:none; opacity:1}}
+
+.member-row{padding:12px 0; border-bottom:1px solid var(--border-soft);}
+.member-row:last-of-type{border-bottom:none;}
+.member-top{display:flex; align-items:center; gap:12px;}
+.member-info{flex:1; min-width:0;}
+.member-info b{display:flex; align-items:center; flex-wrap:wrap; font-size:14px; color:var(--text);}
+.member-info span{display:block; font-size:12px; color:var(--text-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.member-top .tag{flex-shrink:0;}
+.member-actions{display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 0 48px;}
+
+@media (max-width:960px){
+  .msg-shell{display:block; height:calc(100dvh - 190px); min-height:380px;}
+  .msg-list,.msg-thread{height:100%;}
+  .msg-list{border-right:none;}
+  .msg-shell:not(.show-thread) .msg-thread{display:none;}
+  .msg-shell.show-thread .msg-list{display:none;}
+  .msg-back{display:inline-flex;}
+  .msg-thread-head{padding:12px 14px 12px 10px;}
+  .msg-thread-body{padding:14px;}
+  .bubble{max-width:82%; overflow-wrap:anywhere;}
+  .msg-thread-input{padding:10px 12px calc(10px + env(safe-area-inset-bottom) * 0);}
+  .msg-thread-input input{font-size:16px;} /* stops iOS zooming into the field */
+  .page-head p.sub{display:none;}
+}
+@media (max-width:600px){
+  .modal-backdrop{align-items:flex-end; padding:0;}
+  .modal{border-radius:20px 20px 0 0; max-height:90dvh; padding:20px 18px calc(20px + env(safe-area-inset-bottom)); width:100% !important;}
+  .member-actions{margin-left:0;}
+  .modal input[type=text],.modal textarea,.modal select{font-size:16px;}
+}
+
+/* top bar: let the search field shrink instead of sliding under the buttons */
+.topbar-search{min-width:0; overflow:hidden;}
+.topbar-search > span{flex:1; min-width:0;}
+.topbar-actions .icon-btn{flex-shrink:0;}
+@media (max-width:600px){
+  .topbar{gap:8px; padding:0 10px;}
+  .topbar-actions{gap:6px;}
+  .topbar-actions .icon-btn{width:36px; height:36px;}
+  .topbar-actions .icon-btn .avatar{width:36px !important; height:36px !important;}
+  .mobile-menu-btn{width:36px; height:36px;}
+  .topbar-search{padding:8px 11px;}
+}
+@media (max-width:960px){
+  /* leave room for the bottom nav + the "Signed in as" line */
+  .msg-shell{height:calc(100dvh - 300px); min-height:340px;}
+}

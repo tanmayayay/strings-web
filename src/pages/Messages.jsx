@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Send, MessageCircle, Plus } from 'lucide-react';
+import { Send, MessageCircle, Plus, ChevronLeft } from 'lucide-react';
 import { PageHead, Avatar, EmptyState, Modal } from '../components/ui';
 import { useStore } from '../store/store';
 import { Convos, Profiles } from '../lib/api';
@@ -13,6 +13,8 @@ export default function Messages() {
   const [searchParams] = useSearchParams();
   const [convos, setConvos] = useState([]);
   const [activeId, setActiveId] = useState(null);
+  // Phones show one pane at a time: the list, or the open conversation.
+  const [showThread, setShowThread] = useState(false);
   const [thread, setThread] = useState([]);
   const [text, setText] = useState('');
   const bodyRef = useRef(null);
@@ -56,7 +58,7 @@ export default function Messages() {
   // navigate here right after Convos.open).
   useEffect(() => {
     const deep = searchParams.get('c');
-    if (deep && convos.some((c) => c.id === deep)) setActiveId(deep);
+    if (deep && convos.some((c) => c.id === deep)) { setActiveId(deep); setShowThread(true); }
     else if (!deep && !activeId && convos.length > 0) setActiveId(convos[0].id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, convos]);
@@ -130,7 +132,7 @@ export default function Messages() {
   return (
     <div>
       <PageHead title="Messages" sub="Conversations with your network — requests from non-connections appear here too." />
-      <div className="msg-shell">
+      <div className={`msg-shell${showThread ? ' show-thread' : ''}`}>
         <div className="msg-list">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderBottom: '1px solid var(--border-soft)' }}>
             <b style={{ fontSize: 13.5 }}>Conversations</b>
@@ -144,7 +146,7 @@ export default function Messages() {
             convos.map((c) => {
               const o = c.members.find((m) => m.id !== userId) || c.members[0];
               return (
-                <button key={c.id} className={`msg-list-item${c.id === activeId ? ' active' : ''}`} onClick={() => setActiveId(c.id)}>
+                <button key={c.id} className={`msg-list-item${c.id === activeId ? ' active' : ''}`} onClick={() => { setActiveId(c.id); setShowThread(true); }}>
                   <Avatar name={o?.name || '?'} size={38} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <b>{o?.name}</b>
@@ -158,9 +160,10 @@ export default function Messages() {
         <div className="msg-thread">
           {convo ? (
             <>
-              <div className="msg-thread-head" onClick={() => other && navigate(`/profile/${other.id}`)}>
+              <div className="msg-thread-head">
+                <button className="msg-back" onClick={() => setShowThread(false)} aria-label="Back to conversations"><ChevronLeft size={22} /></button>
                 <Avatar name={otherName} size={34} />
-                <div><b>{otherName}</b><div style={{ fontSize: 11.5, color: 'var(--text-faint)' }}>Typically replies within a day</div></div>
+                <div className="msg-thread-who" onClick={() => other && navigate(`/profile/${other.id}`)}><b>{otherName}</b><div style={{ fontSize: 11.5, color: 'var(--text-faint)' }}>Typically replies within a day</div></div>
               </div>
               <div className="msg-thread-body" ref={bodyRef}>
                 {thread.map((m) => (
@@ -168,8 +171,8 @@ export default function Messages() {
                 ))}
               </div>
               <div className="msg-thread-input">
-                <input type="text" placeholder={`Message ${otherName.split(' ')[0]}…`} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} />
-                <button className="btn btn-blue btn-sm" onClick={send}><Send size={14} /></button>
+                <input type="text" enterKeyHint="send" placeholder={`Message ${otherName.split(' ')[0]}…`} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} />
+                <button className="btn btn-blue btn-sm" onClick={send} aria-label="Send message"><Send size={14} /></button>
               </div>
             </>
           ) : (

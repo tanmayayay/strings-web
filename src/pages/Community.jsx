@@ -233,19 +233,24 @@ function MembersPanel({ detail, groupId, onClose, onChanged, onLeft }) {
 
   return (
     <Modal title={`${detail.group.name} — members`} onClose={onClose} wide>
-      {detail.members.map((m) => (
-        <div className="mini-list-item" key={m.user.id}>
-          <Avatar name={m.user.name} size={32} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <b>
-              {m.user.name}{m.user.id === userId ? ' (you)' : ''}{m.user.verificationStatus === 'VERIFIED' && <Verified size={12} />}
-            </b>
-            <span>{[m.user.stakeholderType, m.user.city].filter(Boolean).join(' · ')}</span>
+      {detail.members.map((m) => {
+        const controls = controlsFor(m);
+        return (
+          <div className="member-row" key={m.user.id}>
+            <div className="member-top">
+              <Avatar name={m.user.name} size={36} />
+              <div className="member-info">
+                <b>
+                  {m.user.name}{m.user.id === userId ? ' (you)' : ''}{m.user.verificationStatus === 'VERIFIED' && <Verified size={12} />}
+                </b>
+                <span>{[m.user.stakeholderType, m.user.city].filter(Boolean).join(' · ')}</span>
+              </div>
+              <RoleTag role={m.role} />
+            </div>
+            {controls && <div className="member-actions">{controls}</div>}
           </div>
-          <RoleTag role={m.role} />
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{controlsFor(m)}</div>
-        </div>
-      ))}
+        );
+      })}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
         <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red)' }} onClick={leave}>
           Leave group
