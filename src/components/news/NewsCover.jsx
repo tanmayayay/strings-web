@@ -1,5 +1,6 @@
 import { Mic2, Radio, Disc3, Ticket, TrendingUp, Newspaper, Music } from 'lucide-react';
 import { hashStr } from '../../data/demo';
+import { CATEGORY_LABELS } from '../../lib/news';
 
 /* Generated editorial cover for stories that ship without an image.
    Brand motif: flowing "strings" over a deep gradient, with a category icon. */
@@ -12,15 +13,16 @@ const PALETTES = [
   ['#2A0A0A', '#B91C1C', '#FB923C'],
 ];
 
-const ICONS = { Industry: TrendingUp, Artists: Mic2, 'Live music': Ticket, Events: Ticket, 'Pop culture': Disc3, 'Music industry': TrendingUp };
+const ICONS = { 'Industry & Streaming': TrendingUp, 'Live & Festivals': Ticket, 'Bollywood & Regional': Disc3, 'Pop & Charts': Disc3, 'Indie & Hip-hop': Mic2, 'Rock & Alternative': Mic2, 'Electronic & Dance': Radio, Industry: TrendingUp, Artists: Mic2, 'Live music': Ticket, Events: Ticket, 'Pop culture': Disc3, 'Music industry': TrendingUp };
 
 export function topicOf(item) {
+  if (item.category && item.category !== 'general' && CATEGORY_LABELS[item.category]) return CATEGORY_LABELS[item.category];
   const t = `${item.title || ''} ${item.excerpt || ''}`.toLowerCase();
   if (/concert|tour|festival|gig|live|stage|tickets?/.test(t)) return 'Live music';
   if (/label|stream|royalt|spotify|revenue|deal|industry|copyright|music rights/.test(t)) return 'Industry';
   if (/album|single|song|track|ep\b|release/.test(t)) return 'New music';
   if (/film|bollywood|movie|k-?drama|series|ott/.test(t)) return 'Pop culture';
-  return item.category || 'Music';
+  return CATEGORY_LABELS[item.category] || item.category || 'Music';
 }
 
 export default function NewsCover({ item, height = '100%', large = false }) {

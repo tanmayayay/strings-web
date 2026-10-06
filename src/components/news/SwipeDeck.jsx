@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useMotionValue, useTransform, animate, AnimatePresence } from 'framer-motion';
-import { X, Bookmark, RotateCcw, BookOpen, ExternalLink, Clock, Sparkles, PartyPopper, List, Flame, Headphones, ThumbsDown } from 'lucide-react';
+import { X, Bookmark, RotateCcw, ArrowRight, Clock, Sparkles, PartyPopper, List, Flame, Headphones, ThumbsDown } from 'lucide-react';
 import NewsCover, { topicOf } from './NewsCover';
 import { timeAgo } from '../../lib/format';
 
@@ -15,20 +15,20 @@ function writeJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } c
 const readMins = (it) => Math.max(1, Math.round(((it.body || it.excerpt || '').split(/\s+/).length) / 200));
 
 /* Top card: draggable, with SAVE / PASS / READ stamps that fade in as you drag. */
-function TopCard({ item, command, onCommit, onReact, onReadNow }) {
+function TopCard({ item, command, onCommit, onReact }) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const rotate = useTransform(x, [-300, 0, 300], [-14, 0, 14]);
-  const saveO = useTransform(x, [30, THRESHOLD], [0, 1]);
+  const openO = useTransform(x, [30, THRESHOLD], [0, 1]);
   const passO = useTransform(x, [-THRESHOLD, -30], [1, 0]);
-  const readO = useTransform(y, [-THRESHOLD, -30], [1, 0]);
+  const saveO = useTransform(y, [-THRESHOLD, -30], [1, 0]);
   const busy = useRef(false);
 
   const fly = useCallback(async (dir) => {
     if (busy.current) return;
     busy.current = true;
     const w = window.innerWidth;
-    const to = dir === 'save' ? { x: w } : dir === 'pass' ? { x: -w } : { y: -window.innerHeight };
+    const to = dir === 'open' ? { x: w } : dir === 'pass' ? { x: -w } : { y: -window.innerHeight };
     await Promise.all(Object.entries(to).map(([k, v]) => animate(k === 'x' ? x : y, v, { duration: 0.32, ease: [0.3, 0.7, 0.4, 1] })));
     onCommit(dir);
   }, [x, y, onCommit]);
@@ -37,9 +37,9 @@ function TopCard({ item, command, onCommit, onReact, onReadNow }) {
 
   const onDragEnd = (_e, info) => {
     const { offset, velocity } = info;
-    if (offset.x > THRESHOLD || velocity.x > 700) fly('save');
+    if (offset.x > THRESHOLD || velocity.x > 700) fly('open');
     else if (offset.x < -THRESHOLD || velocity.x < -700) fly('pass');
-    else if (offset.y < -THRESHOLD || velocity.y < -700) { onReadNow(); fly('read'); }
+    else if (offset.y < -THRESHOLD || velocity.y < -700) fly('save');
     else {
       animate(x, 0, { type: 'spring', stiffness: 420, damping: 30 });
       animate(y, 0, { type: 'spring', stiffness: 420, damping: 30 });
@@ -61,9 +61,9 @@ function TopCard({ item, command, onCommit, onReact, onReadNow }) {
       aria-label={item.title}
     >
       <CardBody item={item} onReact={onReact} />
-      <motion.span className="stamp save" style={{ opacity: saveO }}>SAVE</motion.span>
+      <motion.span className="stamp open" style={{ opacity: openO }}>OPEN</motion.span>
       <motion.span className="stamp pass" style={{ opacity: passO }}>PASS</motion.span>
-      <motion.span className="stamp read" style={{ opacity: readO }}>READ</motion.span>
+      <motion.span className="stamp save" style={{ opacity: saveO }}>SAVE</motion.span>
     </motion.article>
   );
 }
@@ -135,8 +135,7 @@ export default function SwipeDeck({ items, isSaved, onSave, onUnsave, onRead, on
     const topic = topicOf(top);
     if (dir === 'save') { if (!isSaved(top)) onSave(top); bump(topic, 2); }
     if (dir === 'pass') bump(topic, -1);
-    // External stories open synchronously (see readNow) so popup blockers allow them.
-    if (dir === 'read') { bump(topic, 2); if (!top.isLive) onRead(top); }
+    if (dir === 'open') { bump(topic, 2); onRead(top); }
     setHistory((h) => [...h.slice(-30), { id: top.id, dir, wasSaved: isSaved(top) }]);
     setSwiped((s) => [...s, top.id]);
     setAnnounce(`${dir === 'save' ? 'Saved' : dir === 'pass' ? 'Passed' : 'Opened'}: ${top.title}`);
@@ -155,12 +154,10 @@ export default function SwipeDeck({ items, isSaved, onSave, onUnsave, onRead, on
     setAnnounce('Brought the last story back');
   }, [history, items, onUnsave]);
 
-  const readNow = useCallback(() => { if (top?.isLive) onRead(top); }, [top, onRead]);
   const go = useCallback((dir) => {
     if (!top || command) return;
-    if (dir === 'read') readNow();
     setCommand({ dir, n: Date.now() });
-  }, [top, command, readNow]);
+  }, [top, command]);
 
   const react = (kind) => {
     if (!top) return;
@@ -173,9 +170,9 @@ export default function SwipeDeck({ items, isSaved, onSave, onUnsave, onRead, on
   useEffect(() => {
     const onKey = (e) => {
       if (e.target.closest('input,textarea,select,[contenteditable]')) return;
-      if (e.key === 'ArrowRight') { e.preventDefault(); go('save'); }
+      if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); go('open'); }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); go('pass'); }
-      else if (e.key === 'ArrowUp' || e.key === 'Enter') { e.preventDefault(); go('read'); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); go('save'); }
       else if (e.key.toLowerCase() === 'z' || e.key === 'Backspace') { e.preventDefault(); undo(); }
     };
     window.addEventListener('keydown', onKey);
@@ -208,7 +205,7 @@ export default function SwipeDeck({ items, isSaved, onSave, onUnsave, onRead, on
                 </div>
               );
             })}
-            <TopCard key={top.id} item={top} command={command} onCommit={commit} onReact={react} onReadNow={readNow} />
+            <TopCard key={top.id} item={top} command={command} onCommit={commit} onReact={react} />
           </>
         ) : (
           <motion.div className="deck-done" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
@@ -233,12 +230,10 @@ export default function SwipeDeck({ items, isSaved, onSave, onUnsave, onRead, on
       </div>
 
       <div className="deck-controls">
-        <button className="dc undo" onClick={undo} disabled={!history.length} aria-label="Undo last swipe (Z)" title="Undo (Z)"><RotateCcw size={20} /></button>
-        <button className="dc pass" onClick={() => go('pass')} disabled={!top} aria-label="Pass (left arrow)" title="Pass (←)"><X size={30} strokeWidth={2.6} /></button>
-        <button className="dc read" onClick={() => go('read')} disabled={!top} aria-label="Read now (up arrow)" title="Read now (↑)">
-          {top?.isLive ? <ExternalLink size={22} /> : <BookOpen size={22} />}
-        </button>
-        <button className="dc save" onClick={() => go('save')} disabled={!top} aria-label="Save for later (right arrow)" title="Save (→)"><Bookmark size={26} strokeWidth={2.4} /></button>
+        <button className="dc undo" onClick={undo} disabled={!history.length} aria-label="Undo last swipe (Z)" title="Undo (Z)"><RotateCcw size={24} strokeWidth={2.6} /></button>
+        <button className="dc pass" onClick={() => go('pass')} disabled={!top} aria-label="Pass (left arrow)" title="Pass (←)"><X size={26} strokeWidth={3} /></button>
+        <button className="dc save" onClick={() => go('save')} disabled={!top} aria-label="Save for later (up arrow)" title="Save (↑)"><Bookmark size={24} strokeWidth={2.6} /></button>
+        <button className="dc open" onClick={() => go('open')} disabled={!top} aria-label="Open story (right arrow)" title="Open (→)"><ArrowRight size={26} strokeWidth={3} /></button>
       </div>
       <div className="sr-only" aria-live="polite">{announce}</div>
     </div>
@@ -258,7 +253,7 @@ export default function SwipeDeck({ items, isSaved, onSave, onUnsave, onRead, on
             ))}
           </ul>
         ) : (
-          <p className="deck-side-empty">Swipe right on a story and it lands here — and in your Saved tab.</p>
+          <p className="deck-side-empty">Swipe up on a story and it lands here — and in your Saved tab.</p>
         )}
       </div>
       <div className="deck-side-card">
@@ -275,9 +270,9 @@ export default function SwipeDeck({ items, isSaved, onSave, onUnsave, onRead, on
       <div className="deck-side-card">
         <h4>Shortcuts</h4>
         <ul className="deck-keys">
-          <li><kbd>→</kbd> Save for later</li>
+          <li><kbd>→</kbd> Open story</li>
           <li><kbd>←</kbd> Pass</li>
-          <li><kbd>↑</kbd> Read now</li>
+          <li><kbd>↑</kbd> Save for later</li>
           <li><kbd>Z</kbd> Undo</li>
         </ul>
       </div>

@@ -4,6 +4,10 @@ import { motion } from 'framer-motion';
 import { Activity, Image as ImageIcon, Briefcase, Music2, Sparkles, Users, Hash, X } from 'lucide-react';
 import { Avatar, EmptyState } from '../components/ui';
 import PostCard from '../components/PostCard';
+import NewsPost from '../components/home/NewsPost';
+import NewsReader from '../components/news/NewsReader';
+import { topicOf } from '../components/news/NewsCover';
+import { fromLive, snapshotOf } from '../lib/news';
 import { SpotlightRail } from '../components/home/Spotlight';
 import {
   MeCard, NewsCard, OppsCard, PeopleCard, NearbyCard, TrendingCard, RailFooter, OppsStrip, PeopleStrip,
@@ -38,7 +42,7 @@ function FeedSkeleton() {
 const soft = (p, fallback) => p.then((r) => r).catch(() => fallback);
 
 export default function Home() {
-  const { user, pushToast } = useStore();
+  const { user, pushToast, isBookmarked, toggleBookmark } = useStore();
   const { openPost, openOpp } = useOutletContext();
   const navigate = useNavigate();
 
@@ -55,6 +59,7 @@ export default function Home() {
   const [following, setFollowing] = useState(() => new Set());
   const [opps, setOpps] = useState([]);
   const [news, setNews] = useState([]);
+  const [reading, setReading] = useState(null);
   const [events, setEvents] = useState([]);
   const [venues, setVenues] = useState([]);
   const [myCounts, setMyCounts] = useState(null);
@@ -160,6 +165,18 @@ export default function Home() {
 
   const first = user?.name?.split(' ')[0] || 'there';
 
+  // Stories from the news feed that fit this person's interests, mixed between posts.
+  const newsPosts = useMemo(() => {
+    let prefs = {};
+    try { prefs = JSON.parse(localStorage.getItem('strings.newsPrefs') || '{}'); } catch { /* ignore */ }
+    return news.map(fromLive)
+      .filter((n) => n.image || n.excerpt)
+      .map((n, i) => ({ n, s: (prefs[topicOf(n)] || 0) * 2 - i * 0.2 + (n.image ? 1.5 : 0) + (n.region === 'india' ? 0.5 : 0) }))
+      .sort((a, b) => b.s - a.s)
+      .map((x) => x.n)
+      .slice(0, 8);
+  }, [news]);
+
   const feed = [];
   visible.forEach((p, i) => {
     feed.push(
@@ -172,6 +189,15 @@ export default function Home() {
         />
       </motion.div>,
     );
+    if (tab === 'foryou' && !tag && i % 4 === 2) {
+      const n = newsPosts[Math.floor(i / 4)];
+      if (n) {
+        feed.push(
+          <NewsPost key={`news-${n.id}`} item={n} saved={isBookmarked('live', n.rawId)} onRead={setReading}
+            onSave={(it) => { const now = toggleBookmark('live', it.rawId, snapshotOf(it)); pushToast(now ? 'Saved for later.' : 'Removed from saved.'); }} />,
+        );
+      }
+    }
     if (tab === 'foryou' && !tag) {
       if (i === 1) feed.push(<OppsStrip key="strip-opps" opps={opps} user={user} />);
       if (i === 4) feed.push(<PeopleStrip key="strip-people" people={people} following={following} onFollow={onFollow} />);
@@ -269,6 +295,14 @@ export default function Home() {
         <NearbyCard events={events} venues={venues} city={user?.city} />
         <RailFooter />
       </aside>
+      {reading && (
+        <NewsReader
+          item={reading}
+          saved={isBookmarked('live', reading.rawId)}
+          onToggleSave={(it) => { const now = toggleBookmark('live', it.rawId, snapshotOf(it)); pushToast(now ? 'Saved for later.' : 'Removed from saved.'); }}
+          onClose={() => setReading(null)}
+        />
+      )}
     </div>
   );
 }

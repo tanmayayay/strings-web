@@ -1,94 +1,64 @@
 import { Router } from 'express';
-import Parser from 'rss-parser';
 import { asyncHandler } from '../lib/http.js';
+import { CATEGORIES, FEEDS, collect, enrichImages } from '../lib/newsFeed.js';
 
 const router = Router();
 
-// Public live music-news feed. Google News RSS needs no API key.
-// Cached for 6h; refresh happens on request (not on a timer) so it keeps
-// working even when the host sleeps between requests.
+// Public multi-source music-news feed (India + world). No API keys.
+// Stale-while-revalidate: once we have a cache, requests are answered at once
+// and a refresh runs in the background when the cache is older than the TTL.
 
-const parser = new Parser({ timeout: 15000 });
+const TTL_MS = 60 * 60 * 1000; // 1h
 
-const FEEDS = [
-  {
-    url: 'https://news.google.com/rss/search?q=music%20industry&hl=en-IN&gl=IN&ceid=IN%3Aen',
-    source: 'Music industry',
-  },
-  {
-    url: 'https://news.google.com/rss/search?q=indian%20musicians&hl=en-IN&gl=IN&ceid=IN%3Aen',
-    source: 'Artists',
-  },
-  {
-    url: 'https://news.google.com/rss/search?q=concerts%20live%20music%20india&hl=en-IN&gl=IN&ceid=IN%3Aen',
-    source: 'Live music',
-  },
-];
+let cache = { updatedAt: 0, items: [], status: [] };
+let inflight = null;
 
-const TTL_MS = 6 * 3600 * 1000;
-const MAX_ITEMS = 30;
-
-let cache = { updatedAt: 0, items: [] };
-
-function toISO(pubDate) {
-  if (!pubDate) return null;
-  const t = Date.parse(pubDate);
-  return Number.isNaN(t) ? null : new Date(t).toISOString();
+function refresh() {
+  if (inflight) return inflight;
+  inflight = (async () => {
+    const { items, status } = await collect(FEEDS);
+    if (items.length) {
+      cache = { updatedAt: Date.now(), items, status };
+      // Fill in missing images without holding up the response.
+      enrichImages(items).catch(() => {});
+    } else {
+      cache = { ...cache, status };
+    }
+  })()
+    .catch(() => {})
+    .finally(() => { inflight = null; });
+  return inflight;
 }
 
-async function fetchFeed(feed) {
-  const parsed = await parser.parseURL(feed.url);
-  return (parsed.items || [])
-    .map((it) => ({
-      id: it.guid || it.link,
-      title: it.title,
-      url: it.link,
-      source: feed.source,
-      publishedAt: toISO(it.pubDate),
-    }))
-    .filter((it) => it.title && it.url);
-}
+const stale = () => Date.now() - cache.updatedAt > TTL_MS;
 
-async function refresh() {
-  // allSettled: one dead feed must not kill the others.
-  const results = await Promise.allSettled(FEEDS.map(fetchFeed));
-  const merged = [];
-  for (const r of results) {
-    if (r.status === 'fulfilled') merged.push(...r.value);
-  }
-  const seen = new Set();
-  const items = merged
-    .filter((it) => {
-      if (seen.has(it.url)) return false;
-      seen.add(it.url);
-      return true;
-    })
-    .sort((a, b) => {
-      if (!a.publishedAt && !b.publishedAt) return 0;
-      if (!a.publishedAt) return 1;
-      if (!b.publishedAt) return -1;
-      return b.publishedAt.localeCompare(a.publishedAt);
-    })
-    .slice(0, MAX_ITEMS);
-  cache = { updatedAt: Date.now(), items };
-}
-
-// GET /api/news/live — public.
+// GET /api/news/live — public. Optional ?region=india|world & ?category=slug
 router.get(
   '/live',
   asyncHandler(async (req, res) => {
-    if (Date.now() - cache.updatedAt > TTL_MS || cache.items.length === 0) {
-      try {
-        await refresh();
-      } catch {
-        // Keep serving the stale cache on failure.
-      }
-    }
+    if (cache.items.length === 0) await refresh();
+    else if (stale()) refresh(); // background
+
+    let items = cache.items;
+    const { region, category } = req.query;
+    if (region === 'india' || region === 'world') items = items.filter((i) => i.region === region);
+    if (typeof category === 'string' && CATEGORIES[category]) items = items.filter((i) => i.category === category);
+
     res.json({
       updatedAt: cache.updatedAt ? new Date(cache.updatedAt).toISOString() : null,
-      items: cache.items,
+      categories: CATEGORIES,
+      items,
     });
   })
 );
+
+// GET /api/news/health — which feeds are alive.
+router.get('/health', (req, res) => {
+  res.json({
+    updatedAt: cache.updatedAt ? new Date(cache.updatedAt).toISOString() : null,
+    count: cache.items.length,
+    feeds: cache.status,
+  });
+});
 
 export default router;
