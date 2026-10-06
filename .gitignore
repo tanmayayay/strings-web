@@ -27,8 +27,4 @@ data-pipeline/.cache/
 *.sw?
 
 .env
-.env.local
-.env.*.local
-
-.env.bak
-*.bak
+backend/.env.bak

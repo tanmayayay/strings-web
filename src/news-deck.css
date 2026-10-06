@@ -1,0 +1,263 @@
+/* Story Deck — Tinder-style swipe deck for the News page's live headlines.
+   All colors come from theme.css vars so light + dark mode just work. */
+
+.story-deck {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: pan-y; /* vertical page scroll passes through; horizontal drag captured by framer-motion */
+}
+
+/* Progress */
+.deck-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0 14px;
+  padding: 0 2px;
+}
+.deck-counter {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.deck-progress {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--blue-dim);
+  overflow: hidden;
+}
+.deck-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--blue);
+  transition: width 0.3s ease;
+}
+
+/* Card stack */
+.deck-stack {
+  position: relative;
+  height: 420px;
+}
+
+.deck-card {
+  position: relative;
+  z-index: 3;
+  height: 420px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-pop);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  cursor: grab;
+  overflow: hidden;
+}
+.deck-card:active {
+  cursor: grabbing;
+}
+.deck-card:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.deck-card-behind {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  cursor: default;
+  transform: scale(0.96) translateY(12px);
+  opacity: 0.75;
+  pointer-events: none;
+}
+.deck-card-behind.deck-behind-2 {
+  z-index: 1;
+  transform: scale(0.92) translateY(24px);
+  opacity: 0.45;
+}
+
+/* Stamps — opacity/rotation driven by the drag motion value */
+.deck-stamp {
+  position: absolute;
+  top: 20px;
+  z-index: 5;
+  padding: 7px 15px;
+  border: 3px solid;
+  border-radius: 10px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  opacity: 0;
+}
+.deck-stamp-save {
+  left: 20px;
+  color: var(--green);
+  border-color: var(--green);
+  background: var(--green-dim);
+}
+.deck-stamp-skip {
+  right: 20px;
+  color: var(--red);
+  border-color: var(--red);
+  background: var(--red-dim);
+}
+
+/* Card content */
+.deck-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.deck-index {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.deck-headline {
+  font-family: var(--font-display);
+  font-size: 25px;
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin: 0 0 14px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.deck-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-faint);
+}
+.deck-when {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.deck-via {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Action buttons */
+.deck-actions {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 18px;
+}
+.deck-btn {
+  flex: 1;
+  max-width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.deck-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+.deck-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+}
+.deck-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.deck-btn-skip {
+  color: var(--red);
+  border-color: var(--red-dim);
+}
+.deck-btn-skip:hover:not(:disabled) {
+  border-color: var(--red);
+}
+.deck-btn-save {
+  color: var(--amber);
+  border-color: var(--amber-dim);
+}
+.deck-btn-save:hover:not(:disabled) {
+  border-color: var(--amber);
+}
+.deck-btn-open {
+  color: var(--blue);
+  border-color: var(--blue-dim);
+}
+.deck-btn-open:hover:not(:disabled) {
+  border-color: var(--blue);
+}
+
+/* Deck-end state */
+.deck-end {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-l);
+  background: var(--panel);
+  padding: 44px 28px;
+  text-align: center;
+}
+.deck-end-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--blue-dim);
+  color: var(--blue);
+}
+.deck-end h3 {
+  font-size: 21px;
+  margin: 0 0 8px;
+}
+.deck-end p {
+  font-size: 15px;
+  color: var(--text-dim);
+  margin: 0 0 20px;
+  line-height: 1.55;
+}
+
+/* Mobile */
+@media (max-width: 520px) {
+  .deck-stack,
+  .deck-card {
+    height: min(70vh, 480px);
+    min-height: 360px;
+  }
+  .deck-headline {
+    font-size: 22px;
+  }
+  .deck-card {
+    padding: 20px;
+  }
+}

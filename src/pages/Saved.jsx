@@ -15,12 +15,20 @@ function useResolvedBookmarks(bookmarks) {
     (async () => {
       const out = {};
       let articles = [];
+      // Live headlines swipe-saved from the Story Deck aren't in the newsroom
+      // API — their metadata is cached at save time in localStorage.
+      let deckMeta = {};
       if (bookmarks.some((b) => b.kind === 'article')) {
         try {
           const r = await Directory.articles({ take: 100 });
           articles = r.items || [];
         } catch {
           articles = [];
+        }
+        try {
+          deckMeta = JSON.parse(localStorage.getItem('strings.deck.meta') || '{}');
+        } catch {
+          deckMeta = {};
         }
       }
       await Promise.all(bookmarks.map(async (b) => {
@@ -30,7 +38,10 @@ function useResolvedBookmarks(bookmarks) {
           if (b.kind === 'opp') item = await Opps.get(b.id);
           else if (b.kind === 'post' || b.kind === 'media') item = await Posts.get(b.id);
           else if (b.kind === 'track') item = await Tracks.get(b.id);
-          else if (b.kind === 'article') item = articles.find((a) => a.id === b.id) || null;
+          else if (b.kind === 'article') {
+            item = articles.find((a) => a.id === b.id) || null;
+            if (!item && deckMeta[b.id]) item = { id: b.id, _live: true, ...deckMeta[b.id] };
+          }
         } catch {
           item = null;
         }
@@ -79,10 +90,14 @@ export default function Saved() {
       kind: 'article', title: 'Articles', icon: Newspaper,
       items: itemsFor('article'),
       render: (a) => (
-        <div className="article-card" key={a.id} onClick={() => navigate(`/news/${a.id}`)}>
-          <Tag color="blue">{a.cat || a.category || 'News'}</Tag>
+        <div className="article-card" key={a.id} onClick={() => (a._live && a.url ? window.open(a.url, '_blank', 'noopener') : navigate(`/news/${a.id}`))} style={{ cursor: 'pointer' }}>
+          <Tag color="blue">{a._live ? (a.source || 'Live') : (a.cat || a.category || 'News')}</Tag>
           <h4 style={{ fontSize: 15.5, margin: '8px 0 6px' }}>{a.title}</h4>
-          <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>{a.excerpt}</p>
+          {a._live ? (
+            <p style={{ color: 'var(--text-faint)', fontSize: 12.5 }}>Saved from the Story Deck{a.source ? ` · Via ${a.source}` : ''} · opens the original story ↗</p>
+          ) : (
+            <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>{a.excerpt}</p>
+          )}
         </div>
       ),
     },

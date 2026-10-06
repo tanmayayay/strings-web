@@ -1,9 +1,13 @@
-import { useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Heart, MessageCircle, Repeat2, Bookmark, Send } from 'lucide-react';
 import { Avatar, Verified } from './ui';
+import Lightbox from './Lightbox';
 import { useStore } from '../store/store';
 import { Posts } from '../lib/api';
+
+const TAG_SPLIT_RE = /(#[\p{L}\p{N}_]+)/gu;
+const TAG_TEST_RE = /#[\p{L}\p{N}_]+/u;
 
 function timeAgo(iso) {
   const t = new Date(iso).getTime();
@@ -24,22 +28,55 @@ function typeLabel(t) {
   return t.charAt(0) + t.slice(1).toLowerCase();
 }
 
+/** Render #hashtags as styled blue spans (no navigation). */
+function renderRich(text) {
+  if (!text) return null;
+  return String(text)
+    .split(TAG_SPLIT_RE)
+    .map((part, i) =>
+      TAG_TEST_RE.test(part) ? (
+        <span key={i} className="post-tag">{part}</span>
+      ) : (
+        <Fragment key={i}>{part}</Fragment>
+      )
+    );
+}
+
 export default function PostCard({ post, onLike }) {
   const { user, isBookmarked, toggleBookmark, pushToast } = useStore();
   const navigate = useNavigate();
   const [liked, setLiked] = useState(false);
   const [likeDelta, setLikeDelta] = useState(0);
   const [likeBusy, setLikeBusy] = useState(false);
+  const [pop, setPop] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [comments, setComments] = useState(null);
   const [commentDraft, setCommentDraft] = useState('');
   const [commentCount, setCommentCount] = useState(post._count?.comments ?? 0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [burst, setBurst] = useState(null);
+  const clickTimer = useRef(null);
+  const burstTimer = useRef(null);
+  const popTimer = useRef(null);
+
+  useEffect(() => () => {
+    clearTimeout(clickTimer.current);
+    clearTimeout(burstTimer.current);
+    clearTimeout(popTimer.current);
+  }, []);
 
   const author = post.author || {};
   const likeCount = (post._count?.likes ?? 0) + likeDelta;
   const saved = isBookmarked('post', post.id);
 
   const openProfile = () => { if (author.id) navigate(`/profile/${author.id}`); };
+
+  const triggerPop = () => {
+    clearTimeout(popTimer.current);
+    setPop(false);
+    requestAnimationFrame(() => setPop(true));
+    popTimer.current = setTimeout(() => setPop(false), 420);
+  };
 
   const toggleLike = async () => {
     if (likeBusy) return;
@@ -50,6 +87,7 @@ export default function PostCard({ post, onLike }) {
     if (!liked) {
       setLiked(true);
       setLikeDelta(prevDelta + 1);
+      triggerPop();
       try {
         await Posts.like(post.id);
         onLike?.(post.id, true);
@@ -77,6 +115,27 @@ export default function PostCard({ post, onLike }) {
       }
     }
     setLikeBusy(false);
+  };
+
+  /* Single click opens the lightbox (slightly delayed so a double-click
+     can claim the gesture); double-click bursts a heart and likes. */
+  const handleMediaClick = () => {
+    clearTimeout(clickTimer.current);
+    clickTimer.current = setTimeout(() => setLightboxOpen(true), 260);
+  };
+
+  const handleMediaDoubleClick = (e) => {
+    clearTimeout(clickTimer.current);
+    const rect = e.currentTarget.getBoundingClientRect();
+    setBurst({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+      id: Date.now(),
+    });
+    clearTimeout(burstTimer.current);
+    burstTimer.current = setTimeout(() => setBurst(null), 780);
+    if (!liked && !likeBusy) toggleLike();
+    else triggerPop();
   };
 
   const toggleComments = async () => {
@@ -117,12 +176,27 @@ export default function PostCard({ post, onLike }) {
           <span>{typeLabel(author.stakeholderType)}{author.city ? ` · ${author.city}` : ''} · {timeAgo(post.createdAt)}</span>
         </div>
       </div>
-      <div className="post-body">{post.body}</div>
+      <div className="post-body">{renderRich(post.body)}</div>
       {post.mediaUrl && (
-        <img src={post.mediaUrl} alt="" style={{ width: '100%', borderRadius: 10, marginBottom: 10, display: 'block' }} />
+        <div
+          className="post-media"
+          role="button"
+          tabIndex={0}
+          aria-label="View post media"
+          onClick={handleMediaClick}
+          onDoubleClick={handleMediaDoubleClick}
+          onKeyDown={(e) => { if (e.key === 'Enter') setLightboxOpen(true); }}
+        >
+          <img src={post.mediaUrl} alt="" />
+          {burst && (
+            <span className="heart-burst" key={burst.id} style={{ left: burst.x, top: burst.y }}>
+              <Heart size={64} fill="currentColor" strokeWidth={0} />
+            </span>
+          )}
+        </div>
       )}
       <div className="post-actions">
-        <button className={`post-action${liked ? ' liked' : ''}`} onClick={toggleLike} aria-label="Like">
+        <button className={`post-action${liked ? ' liked' : ''}${pop ? ' pop' : ''}`} onClick={toggleLike} aria-label="Like">
           <Heart size={15} fill={liked ? 'currentColor' : 'none'} /> {likeCount}
         </button>
         <button className="post-action" onClick={toggleComments} aria-label="Comments">
@@ -178,6 +252,13 @@ export default function PostCard({ post, onLike }) {
             </button>
           </div>
         </div>
+      )}
+      {lightboxOpen && post.mediaUrl && (
+        <Lightbox
+          items={[{ src: post.mediaUrl, alt: (post.body || '').slice(0, 120) || 'Post media' }]}
+          index={0}
+          onClose={() => setLightboxOpen(false)}
+        />
       )}
     </div>
   );
