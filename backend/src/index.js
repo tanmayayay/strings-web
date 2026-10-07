@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 
 import authRouter from './routes/auth.js';
 import profilesRouter from './routes/profiles.js';
@@ -43,7 +44,40 @@ if (process.env.FRONTEND_URL) {
 } else {
   app.use(cors());
 }
+// Smaller responses over the wire (JSON typically shrinks 70-85%).
+app.use(compression());
 app.use(express.json({ limit: '1mb' }));
+
+// Per-request timing: exposed as a Server-Timing header (visible in the
+// browser's Network tab) and logged when slow, so slow endpoints show up in
+// the Render logs by name.
+const SLOW_MS = Number(process.env.SLOW_REQUEST_MS || 600);
+app.use((req, res, next) => {
+  const t0 = process.hrtime.bigint();
+  const origWriteHead = res.writeHead;
+  res.writeHead = function patched(...args) {
+    const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+    if (!res.headersSent) res.setHeader('Server-Timing', `app;dur=${ms.toFixed(1)}`);
+    return origWriteHead.apply(this, args);
+  };
+  res.on('finish', () => {
+    const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+    if (ms > SLOW_MS) console.warn(`[slow-request] ${req.method} ${req.originalUrl.split('?')[0]} ${res.statusCode} ${ms.toFixed(0)}ms`);
+  });
+  next();
+});
+
+// Public, rarely-changing reads can be cached briefly by the browser/CDN.
+app.use('/api/news/live', (req, res, next) => {
+  res.setHeader('Cache-Control', 'public, max-age=120, stale-while-revalidate=600');
+  next();
+});
+app.use(['/api/profiles', '/api/opportunities', '/api/venues', '/api/events', '/api/articles'], (req, res, next) => {
+  if (req.method === 'GET' && !req.headers.authorization) {
+    res.setHeader('Cache-Control', 'public, max-age=10, stale-while-revalidate=60');
+  }
+  next();
+});
 
 // Health — no auth, used by uptime checks and the smoke test.
 app.get('/api/health', (req, res) => {

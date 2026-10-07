@@ -136,6 +136,7 @@ model Connection {
   createdAt  DateTime         @default(now())
 
   @@unique([followerId, followeeId])
+  @@index([followeeId])
 }
 
 model Post {
@@ -212,6 +213,7 @@ model Opportunity {
 
   @@index([status])
   @@index([city])
+  @@index([createdAt])
 }
 
 model Application {
@@ -226,6 +228,7 @@ model Application {
   createdAt     DateTime          @default(now())
 
   @@unique([opportunityId, applicantId])
+  @@index([applicantId])
 }
 
 // --------------------------------------------------------------- Publishing
@@ -277,6 +280,7 @@ model Message {
 
   @@index([conversationId])
   @@index([createdAt])
+  @@index([conversationId, createdAt])
 }
 
 model Notification {
@@ -292,6 +296,7 @@ model Notification {
 
   @@index([userId])
   @@index([read])
+  @@index([userId, createdAt])
 }
 
 // ---------------------------------------------------------------- Bookings

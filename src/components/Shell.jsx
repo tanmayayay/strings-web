@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { NavLink, Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   Home, LayoutGrid, Handshake, Users, Newspaper, MessageCircle, Search,
   User, Bell, Settings, Info, LifeBuoy, Plus, Moon, Sun, Bookmark, Radio, Menu, X, LogOut,
@@ -48,6 +48,7 @@ export default function Shell({ onOpenPalette, onNewPost, onNewOpp }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [recent, setRecent] = useState([]);
   const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   // Don't let the page scroll behind the open drawer.
   useEffect(() => {
@@ -204,7 +205,11 @@ export default function Shell({ onOpenPalette, onNewPost, onNewOpp }) {
 
         <main className="content-area">
           <div className="content-inner wide">
-            <Outlet context={{ openPost: onNewPost, openOpp: onNewOpp }} />
+            <Suspense fallback={<div className="page-loading"><span className="spinner" /></div>}>
+              <div key={pathname} className="page-fade">
+                <Outlet context={{ openPost: onNewPost, openOpp: onNewOpp }} />
+              </div>
+            </Suspense>
           </div>
         </main>
 

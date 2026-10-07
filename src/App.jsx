@@ -1,29 +1,28 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { StoreProvider, useStore } from './store/store';
 import Shell from './components/Shell';
 import CommandPalette from './components/CommandPalette';
 import { Toasts } from './components/widgets';
 import { PostModal, OppModal } from './components/ComposerModals';
 import Landing from './pages/Landing';
-import Onboarding from './pages/Onboarding';
-import Epk from './pages/Epk';
-import Home from './pages/Home';
-import Gighub from './pages/Gighub';
-import Collab from './pages/Collab';
-import Community from './pages/Community';
-import News from './pages/News';
-import NewsArticle from './pages/NewsArticle';
-import Messages from './pages/Messages';
-import Live from './pages/Live';
-import Profile from './pages/Profile';
-import Search from './pages/Search';
-import Notifications from './pages/Notifications';
-import Settings from './pages/Settings';
-import About from './pages/About';
-import Support from './pages/Support';
-import Saved from './pages/Saved';
+const Onboarding = lazy(() => import('./pages/Onboarding'));
+const Epk = lazy(() => import('./pages/Epk'));
+const Home = lazy(() => import('./pages/Home'));
+const Gighub = lazy(() => import('./pages/Gighub'));
+const Collab = lazy(() => import('./pages/Collab'));
+const Community = lazy(() => import('./pages/Community'));
+const News = lazy(() => import('./pages/News'));
+const NewsArticle = lazy(() => import('./pages/NewsArticle'));
+const Messages = lazy(() => import('./pages/Messages'));
+const Live = lazy(() => import('./pages/Live'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Search = lazy(() => import('./pages/Search'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const Settings = lazy(() => import('./pages/Settings'));
+const About = lazy(() => import('./pages/About'));
+const Support = lazy(() => import('./pages/Support'));
+const Saved = lazy(() => import('./pages/Saved'));
 import EmailVerified from './pages/EmailVerified';
 
 /* Supabase email-confirmation links redirect to the Site URL with the
@@ -52,21 +51,6 @@ function ScrollTop() {
   const { pathname } = useLocation();
   useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
   return null;
-}
-
-/* Subtle page transition on every route change */
-function RouteTransition({ children }) {
-  const { pathname } = useLocation();
-  return (
-    <motion.div
-      key={pathname}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.22, ease: 'easeOut' }}
-    >
-      {children}
-    </motion.div>
-  );
 }
 
 function RequireAuth({ children }) {
@@ -112,7 +96,7 @@ function AppShell() {
   return (
     <>
       <ScrollTop />
-      <RouteTransition>
+      <Suspense fallback={<div className="auth-boot"><span className="spinner" /></div>}>
       <Routes>
         <Route path="/" element={<LandingGate />} />
         <Route path="/onboarding" element={<Onboarding />} />
@@ -146,7 +130,7 @@ function AppShell() {
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      </RouteTransition>
+      </Suspense>
 
       <CommandPalette open={palette} onClose={() => setPalette(false)} />
       {modal?.type === 'post' && <PostModal startWithPhoto={modal.photo} prefill={modal.prefill} onClose={() => setModal(null)} />}

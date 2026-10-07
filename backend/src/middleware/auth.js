@@ -89,7 +89,29 @@ export async function verifySupabaseToken(token) {
 
 // Map a verified Supabase identity to our Prisma User, creating a minimal
 // profile on first sight (the "claim your profile" flow enriches it later).
+// The authId -> user row never changes for a signed-in person, so remember it
+// for a minute instead of hitting the database on every authenticated request.
+const USER_TTL_MS = 60_000;
+const userCache = new Map(); // authId -> { at, user }
+const userInflight = new Map();
+
 export async function getOrCreateUser(payload) {
+  const authId = payload.sub;
+  const hit = userCache.get(authId);
+  if (hit && Date.now() - hit.at < USER_TTL_MS) return hit.user;
+  if (userInflight.has(authId)) return userInflight.get(authId);
+  const p = loadOrCreateUser(payload)
+    .then((user) => {
+      if (userCache.size > 5000) userCache.clear();
+      userCache.set(authId, { at: Date.now(), user });
+      return user;
+    })
+    .finally(() => userInflight.delete(authId));
+  userInflight.set(authId, p);
+  return p;
+}
+
+async function loadOrCreateUser(payload) {
   const authId = payload.sub;
   let user = await prisma.user.findUnique({ where: { authId } });
   if (user) return user;

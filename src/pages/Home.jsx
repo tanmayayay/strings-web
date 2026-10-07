@@ -88,12 +88,15 @@ export default function Home() {
   useEffect(() => {
     let off = false;
     (async () => {
-      const [pp, fl, op, nw, me] = await Promise.all([
+      const [pp, fl, op, nw, me, evCity, evAll, vs] = await Promise.all([
         soft(Profiles.list({ take: 24 }), { items: [] }),
         soft(Profiles.following(), { items: [] }),
         soft(Opps.list({ status: 'OPEN', take: 12 }), { items: [] }),
         soft(NewsLive.get(), { items: [] }),
         user?.id ? soft(Profiles.get(user.id), null) : null,
+        soft(Directory.events({ city: user?.city, take: 6 }), { items: [] }),
+        soft(Directory.events({ take: 6 }), { items: [] }),
+        soft(Directory.venues({ city: user?.city, take: 4 }), { items: [] }),
       ]);
       if (off) return;
       setPeople((pp.items || []).filter((p) => p.id !== user?.id));
@@ -104,14 +107,10 @@ export default function Home() {
 
       const now = Date.now();
       const upcoming = (list) => (list || []).filter((e) => !e.date || new Date(e.date).getTime() >= now);
-      let ev = upcoming((await soft(Directory.events({ city: user?.city, take: 6 }), { items: [] })).items);
-      if (!ev.length) ev = upcoming((await soft(Directory.events({ take: 6 }), { items: [] })).items);
-      if (off) return;
+      let ev = upcoming(evCity.items);
+      if (!ev.length) ev = upcoming(evAll.items);
       setEvents(ev);
-      if (!ev.length) {
-        const vs = await soft(Directory.venues({ city: user?.city, take: 4 }), { items: [] });
-        if (!off) setVenues(vs.items || []);
-      }
+      if (!ev.length) setVenues(vs.items || []);
     })();
     return () => { off = true; };
   }, [user?.id, user?.city]);

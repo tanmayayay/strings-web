@@ -1,6 +1,16 @@
 import { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { Profiles, onUnauthorized } from '../lib/api';
+import { Profiles, onUnauthorized, clearApiCache } from '../lib/api';
+
+// The signed-in profile is remembered on this device so the app can open
+// instantly and refresh it quietly in the background.
+const PROFILE_KEY = (uid) => `strings.profile.${uid}`;
+function readCachedProfile(uid) {
+  try { return JSON.parse(localStorage.getItem(PROFILE_KEY(uid)) || 'null'); } catch { return null; }
+}
+function writeCachedProfile(uid, p) {
+  try { if (p) localStorage.setItem(PROFILE_KEY(uid), JSON.stringify(p)); else localStorage.removeItem(PROFILE_KEY(uid)); } catch { /* ignore */ }
+}
 
 const StoreCtx = createContext(null);
 
@@ -52,9 +62,11 @@ export function StoreProvider({ children }) {
 
   const signOut = useCallback(async () => {
     try { await supabase.auth.signOut(); } catch { /* ignore */ }
+    writeCachedProfile(session?.user?.id, null);
+    clearApiCache();
     setSession(null);
     setProfile(null);
-  }, []);
+  }, [session]);
 
   // Any 401 from the API means the session is dead — sign out globally.
   useEffect(() => {
@@ -68,17 +80,26 @@ export function StoreProvider({ children }) {
       setProfile(null);
       return null;
     }
-    setProfileLoading(true);
+    const uid = session.user?.id ?? null;
+    // Open instantly from the remembered profile, then refresh behind the scenes.
+    const cached = uid ? readCachedProfile(uid) : null;
+    if (cached) {
+      setProfile((cur) => cur ?? cached);
+      setProfileFor(uid);
+    } else {
+      setProfileLoading(true);
+    }
     try {
       const p = await Profiles.me();
       setProfile(p);
+      writeCachedProfile(uid, p);
       return p;
     } catch {
-      setProfile(null);
-      return null;
+      if (!cached) setProfile(null);
+      return cached;
     } finally {
       setProfileLoading(false);
-      setProfileFor(session.user?.id ?? null);
+      setProfileFor(uid);
     }
   }, [session]);
 

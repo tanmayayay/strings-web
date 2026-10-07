@@ -12,6 +12,28 @@ export function apiBaseUrl() {
   return API_BASE;
 }
 
+/** Start the first screen's requests while the page code is still downloading. */
+export function prefetchBoot() {
+  try {
+    const signedIn = Object.keys(localStorage).some((k) => /^sb-.*-auth-token$/.test(k));
+    const h = window.location.hash;
+    if (!signedIn || !(h === '' || h === '#/' || h.startsWith('#/home'))) return;
+    const quiet = (p) => p.catch(() => {});
+    quiet(import('../pages/Home')); // fetch the Home screen's code in parallel with its data
+    quiet(api('/api/profiles/me', { fresh: true }));
+    quiet(api('/api/posts?take=40', { auth: false }));
+    quiet(api('/api/stories', { auth: false }));
+    quiet(api('/api/news/live', { auth: false }));
+    quiet(api('/api/profiles?take=24', { auth: false }));
+    quiet(api('/api/opportunities?status=OPEN&take=12', { auth: false }));
+  } catch { /* prefetch is best effort */ }
+}
+
+/** Wake the API (free hosts sleep when idle) while the page is still loading. */
+export function warmUpApi() {
+  try { fetch(`${API_BASE}/api/health`, { mode: 'cors', cache: 'no-store' }).catch(() => {}); } catch { /* ignore */ }
+}
+
 async function getAccessToken() {
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? null;
@@ -32,7 +54,41 @@ export class ApiError extends Error {
   }
 }
 
-export async function api(path, { method = 'GET', body, auth = true } = {}) {
+// ---- GET cache --------------------------------------------------------------
+// Repeat reads inside a short window are answered from memory and identical
+// in-flight requests are shared, so moving between pages feels instant and the
+// server isn't asked the same question twice. Any write clears the cache so
+// nothing shown after an action is stale. Chat and notifications are never cached.
+const cache = new Map(); // key -> { t, data }
+const inflight = new Map(); // key -> Promise
+const NEVER = /^\/api\/(conversations|notifications)/;
+const LONG = /^\/api\/news\/live/;
+const ttlFor = (path) => (NEVER.test(path) ? 0 : LONG.test(path) ? 300000 : 20000);
+
+export function clearApiCache() {
+  cache.clear();
+  inflight.clear();
+}
+
+export function api(path, opts = {}) {
+  const { method = 'GET', auth = true, fresh = false } = opts;
+  if (method !== 'GET') {
+    return request(path, opts).then((d) => { clearApiCache(); return d; });
+  }
+  const ttl = ttlFor(path);
+  if (!ttl) return request(path, opts);
+  const key = `${auth ? 'a' : 'p'}:${path}`;
+  const hit = cache.get(key);
+  if (!fresh && hit && Date.now() - hit.t < ttl) return Promise.resolve(hit.data);
+  if (inflight.has(key)) return inflight.get(key);
+  const pr = request(path, opts)
+    .then((d) => { cache.set(key, { t: Date.now(), data: d }); return d; })
+    .finally(() => inflight.delete(key));
+  inflight.set(key, pr);
+  return pr;
+}
+
+async function request(path, { method = 'GET', body, auth = true } = {}) {
   const headers = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (auth) {
@@ -89,7 +145,7 @@ export const Profiles = {
   list: (params = {}) => api(`/api/profiles${qs(params)}`, { auth: false }),
   get: (id) => api(`/api/profiles/${id}`, { auth: false }),
   /** The caller's own profile — auto-provisioned on first sight. */
-  me: () => api('/api/profiles/me'),
+  me: () => api('/api/profiles/me', { fresh: true }),
   create: (data) => api('/api/profiles', { method: 'POST', body: data }),
   update: (id, data) => api(`/api/profiles/${id}`, { method: 'PATCH', body: data }),
   follow: (id) => api(`/api/profiles/${id}/follow`, { method: 'POST' }),
