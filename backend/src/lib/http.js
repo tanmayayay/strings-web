@@ -31,3 +31,22 @@ export function exactWhere(query, fields) {
   }
   return where;
 }
+
+// Photos must come from our own Supabase Storage (not arbitrary third-party URLs,
+// which could be tracking pixels or malicious hosts). Dev without Supabase: any https URL.
+export function isOwnMediaUrl(url) {
+  if (typeof url !== 'string' || url.length > 1000 || !/^https:\/\//.test(url)) return false;
+  const base = (process.env.SUPABASE_URL || '').replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+  if (!/^https:\/\//.test(base)) return true;
+  return url.startsWith(`${base}/storage/v1/object/public/`);
+}
+
+// Max length of a string field; returns an error message or null.
+export function tooLong(value, max, field) {
+  return typeof value === 'string' && value.length > max ? `Field "${field}" must be at most ${max} characters.` : null;
+}
+
+// JSON blobs (profile "detail") are capped so nobody can park megabytes in a row.
+export function jsonTooBig(value, maxBytes = 10_000) {
+  try { return JSON.stringify(value).length > maxBytes; } catch { return true; }
+}

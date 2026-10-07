@@ -1,7 +1,17 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
-import { auth } from '../middleware/auth.js';
-import { asyncHandler, bad, notFound, pagination } from '../lib/http.js';
+import { auth, optionalAuth } from '../middleware/auth.js';
+import { asyncHandler, bad, notFound, pagination, tooLong, jsonTooBig } from '../lib/http.js';
+
+// Shared field limits for create + edit.
+function checkProfileFields({ name, bio, city, detail }) {
+  return (
+    tooLong(name, 80, 'name') || tooLong(bio, 1000, 'bio') || tooLong(city, 80, 'city') ||
+    (typeof bio !== 'string' && bio != null ? 'Field "bio" must be text.' : null) ||
+    (typeof city !== 'string' && city != null ? 'Field "city" must be text.' : null) ||
+    (detail !== undefined && jsonTooBig(detail) ? 'Field "detail" is too large.' : null)
+  );
+}
 
 const router = Router();
 
@@ -26,7 +36,8 @@ router.get(
   '/',
   asyncHandler(async (req, res) => {
     const { take, skip } = pagination(req);
-    const where = {};
+    // Private and connections-only profiles never appear in lists or search.
+    const where = { visibility: 'PUBLIC' };
     if (req.query.type) {
       if (!STAKEHOLDER_TYPES.includes(req.query.type)) {
         return bad(res, 400, `Invalid type. One of: ${STAKEHOLDER_TYPES.join(', ')}`);
@@ -34,7 +45,7 @@ router.get(
       where.stakeholderType = req.query.type;
     }
     if (req.query.city) where.city = req.query.city;
-    if (req.query.search) where.name = { contains: req.query.search };
+    if (req.query.search) where.name = { contains: String(req.query.search).slice(0, 80), mode: 'insensitive' };
 
     const [items, total] = await Promise.all([
       prisma.user.findMany({
@@ -60,6 +71,8 @@ router.post(
   auth,
   asyncHandler(async (req, res) => {
     const { name, stakeholderType, bio, city, visibility, detail } = req.body ?? {};
+    const fieldError = checkProfileFields({ name, bio, city, detail });
+    if (fieldError) return bad(res, 400, fieldError);
 
     if (!name || typeof name !== 'string' || !name.trim()) {
       return bad(res, 400, 'Field "name" is required.');
@@ -128,6 +141,7 @@ router.get(
 // GET /api/profiles/:id
 router.get(
   '/:id',
+  optionalAuth,
   asyncHandler(async (req, res) => {
     const user = await prisma.user.findUnique({
       where: { id: req.params.id },
@@ -142,7 +156,21 @@ router.get(
       },
     });
     if (!user) return notFound(res, 'Profile');
+    // Private profiles are visible only to their owner.
+    if (user.visibility === 'PRIVATE' && req.user?.id !== user.id) return notFound(res, 'Profile');
     res.json(user);
+  })
+);
+
+// DELETE /api/profiles/me  (auth) — delete the caller's account and all their content.
+// Required by the App Store / Play Store and India's DPDP Act. Posts, comments,
+// likes, stories, messages, memberships etc. cascade via the schema.
+router.delete(
+  '/me',
+  auth,
+  asyncHandler(async (req, res) => {
+    await prisma.user.delete({ where: { id: req.user.id } });
+    res.json({ ok: true });
   })
 );
 
@@ -156,6 +184,8 @@ router.patch(
     }
 
     const { name, stakeholderType, bio, city, visibility, detail } = req.body ?? {};
+    const fieldError = checkProfileFields({ name, bio, city, detail });
+    if (fieldError) return bad(res, 400, fieldError);
     const data = {};
     if (name !== undefined) {
       if (typeof name !== 'string' || !name.trim()) return bad(res, 400, 'Field "name" must be a non-empty string.');

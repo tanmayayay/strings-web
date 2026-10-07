@@ -172,3 +172,20 @@ export const auth = asyncHandler(async (req, res, next) => {
   req.user = { id: token.slice('dev-'.length) };
   next();
 });
+
+/**
+ * Like `auth`, but a missing/invalid token just means "anonymous".
+ * Used on public reads that show a bit more to the owner (e.g. a private profile).
+ */
+export const optionalAuth = asyncHandler(async (req, res, next) => {
+  const token = /^Bearer\s+(\S+)$/.exec(req.headers.authorization || '')?.[1];
+  if (!token || !isSupabaseMode) return next();
+  try {
+    const payload = await verifySupabaseToken(token);
+    const user = await getOrCreateUser(payload);
+    req.user = { id: user.id, authId: user.authId, email: payload.email ?? null };
+  } catch {
+    /* anonymous */
+  }
+  next();
+});

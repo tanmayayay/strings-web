@@ -34,6 +34,20 @@ export default function Settings() {
     navigate('/');
   };
 
+  const deleteAccount = async () => {
+    if (!window.confirm('Delete your Strings account? Your profile, posts, stories and messages will be permanently removed. This cannot be undone.')) return;
+    if (window.prompt('Type DELETE to confirm.') !== 'DELETE') return;
+    try {
+      await Profiles.deleteMe();
+      Object.keys(localStorage).filter((k) => k.startsWith('strings.')).forEach((k) => localStorage.removeItem(k));
+      await logout();
+      navigate('/');
+      pushToast('Your account was deleted.');
+    } catch (e) {
+      pushToast(e.message || 'Could not delete the account.', 'error');
+    }
+  };
+
   const resetLocal = () => {
     if (!window.confirm('Clear locally stored bookmarks and preferences on this device?')) return;
     Object.keys(localStorage).filter((k) => k.startsWith('strings.')).forEach((k) => localStorage.removeItem(k));
@@ -92,6 +106,9 @@ export default function Settings() {
         <h4>Account</h4>
         <button className="btn btn-ghost btn-sm" onClick={signOut}>
           <LogOut size={14} /> Sign out
+        </button>
+        <button className="btn btn-ghost btn-sm" onClick={deleteAccount} style={{ color: 'var(--red)', borderColor: 'var(--red)', marginLeft: 8 }}>
+          <Trash2 size={14} /> Delete my account
         </button>
       </div>
 

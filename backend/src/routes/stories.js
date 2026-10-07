@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { auth } from '../middleware/auth.js';
-import { asyncHandler, bad, notFound } from '../lib/http.js';
+import { asyncHandler, bad, notFound, isOwnMediaUrl } from '../lib/http.js';
 
 const router = Router();
 
@@ -49,8 +49,8 @@ router.post(
   auth,
   asyncHandler(async (req, res) => {
     const { mediaUrl, caption } = req.body ?? {};
-    if (typeof mediaUrl !== 'string' || !/^https:\/\//.test(mediaUrl) || mediaUrl.length > 1000) {
-      return bad(res, 400, 'Field "mediaUrl" must be an https URL.');
+    if (!isOwnMediaUrl(mediaUrl)) {
+      return bad(res, 400, 'Field "mediaUrl" must be a photo uploaded to Strings.');
     }
     if (caption != null && (typeof caption !== 'string' || caption.length > 140)) {
       return bad(res, 400, 'Field "caption" must be at most 140 characters.');

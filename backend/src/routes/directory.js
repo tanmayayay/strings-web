@@ -14,7 +14,7 @@ router.get(
     const where = {};
     if (req.query.city) where.city = req.query.city;
     if (req.query.type) where.type = req.query.type;
-    if (req.query.search) where.name = { contains: req.query.search };
+    if (req.query.search) where.name = { contains: String(req.query.search).slice(0, 80), mode: 'insensitive' };
 
     const [items, total] = await Promise.all([
       prisma.venue.findMany({ where, orderBy: { name: 'asc' }, take, skip }),

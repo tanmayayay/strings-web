@@ -152,6 +152,8 @@ export const Profiles = {
   unfollow: (id) => api(`/api/profiles/${id}/follow`, { method: 'DELETE' }),
   /** People the caller follows — for the Messages "new conversation" picker. */
   following: () => api('/api/profiles/me/following'),
+  /** Permanently deletes the caller's account and everything they posted. */
+  deleteMe: () => api('/api/profiles/me', { method: 'DELETE' }),
 };
 
 export const Posts = {

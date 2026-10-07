@@ -2,6 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import compression from 'compression';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 
 import authRouter from './routes/auth.js';
 import profilesRouter from './routes/profiles.js';
@@ -35,6 +37,20 @@ console.log(
   `[strings-backend] auth mode: ${isSupabaseMode ? 'SUPABASE (real JWTs required)' : 'DEV-ONLY mock (set SUPABASE_URL + SUPABASE_JWT_SECRET to switch)'}`
 );
 
+// Fail closed: without real Supabase config the API would fall back to the
+// dev-only mock login, where anyone could sign in as anyone. Never allow that live.
+if (process.env.NODE_ENV === 'production' && !isSupabaseMode) {
+  console.error('[strings-backend] FATAL: NODE_ENV=production but SUPABASE_URL / SUPABASE_JWT_SECRET are not set. Refusing to start.');
+  process.exit(1);
+}
+if (process.env.NODE_ENV === 'production' && !process.env.FRONTEND_URL) {
+  console.warn('[strings-backend] WARNING: FRONTEND_URL is not set, so CORS allows every origin.');
+}
+
+// Behind Render's proxy: trust one hop so rate limits see the real client IP.
+app.set('trust proxy', 1);
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+
 // In production set FRONTEND_URL to the deployed web origin(s),
 // comma-separated — e.g. FRONTEND_URL=https://tanmayayay.github.io
 // When unset (local dev), all origins are allowed as before.
@@ -44,6 +60,20 @@ if (process.env.FRONTEND_URL) {
 } else {
   app.use(cors());
 }
+// Abuse protection. Generous for people, tight for scripts.
+const json429 = (message) => ({ error: message });
+const apiLimiter = rateLimit({
+  windowMs: 60_000, limit: 300, standardHeaders: 'draft-7', legacyHeaders: false,
+  skip: (req) => req.path === '/health',
+  message: json429('Too many requests. Please slow down and try again in a minute.'),
+});
+const writeLimiter = rateLimit({
+  windowMs: 60_000, limit: 60, standardHeaders: 'draft-7', legacyHeaders: false,
+  skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
+  message: json429('You are doing that too quickly. Please wait a moment.'),
+});
+app.use('/api', apiLimiter, writeLimiter);
+
 // Smaller responses over the wire (JSON typically shrinks 70-85%).
 app.use(compression());
 app.use(express.json({ limit: '1mb' }));

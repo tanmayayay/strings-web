@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { auth } from '../middleware/auth.js';
-import { asyncHandler, bad, notFound, pagination } from '../lib/http.js';
+import { asyncHandler, bad, notFound, pagination, isOwnMediaUrl, tooLong } from '../lib/http.js';
 
 const router = Router();
 
@@ -51,8 +51,10 @@ router.post(
     if (!body || typeof body !== 'string' || !body.trim()) {
       return bad(res, 400, 'Field "body" is required.');
     }
-    if (mediaUrl != null && (typeof mediaUrl !== 'string' || !/^https:\/\//.test(mediaUrl) || mediaUrl.length > 1000)) {
-      return bad(res, 400, 'Field "mediaUrl" must be an https URL.');
+    const longBody = tooLong(body, 3000, 'body');
+    if (longBody) return bad(res, 400, longBody);
+    if (mediaUrl != null && !isOwnMediaUrl(mediaUrl)) {
+      return bad(res, 400, 'Field "mediaUrl" must be a photo uploaded to Strings.');
     }
     if (visibility !== undefined && !POST_VISIBILITIES.includes(visibility)) {
       return bad(res, 400, `Field "visibility" must be one of: ${POST_VISIBILITIES.join(', ')}`);
@@ -155,6 +157,7 @@ router.post(
     if (!body || typeof body !== 'string' || !body.trim()) {
       return bad(res, 400, 'Field "body" is required.');
     }
+    if (body.length > 1000) return bad(res, 400, 'Comments can be at most 1000 characters.');
 
     const comment = await prisma.comment.create({
       data: { postId: post.id, authorId: req.user.id, body: body.trim() },
