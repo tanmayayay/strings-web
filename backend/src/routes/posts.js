@@ -10,7 +10,7 @@ const POST_VISIBILITIES = ['PUBLIC', 'CONNECTIONS'];
 const authorSelect = {
   id: true,
   name: true,
-  stakeholderType: true,
+  stakeholderType: true, avatarUrl: true,
   city: true,
   verificationStatus: true,
 };

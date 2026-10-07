@@ -99,7 +99,7 @@ export default function Shell({ onOpenPalette, onNewPost, onNewOpp }) {
       <NavGroup label="More" items={NAV_MORE} onNav={onNav} unreadCount={unreadCount} />
       <div className="sidebar-foot">
         <button className="mini-profile" onClick={() => { onNav?.(); navigate(`/profile/${userId}`); }}>
-          <Avatar name={user?.name || 'Guest'} size={34} />
+          <Avatar name={user?.name || 'Guest'} src={user?.avatarUrl} size={34} />
           <div style={{ flex: 1 }}>
             <b>{user?.name || 'Guest'}</b>
             <span>{user ? `${user.stakeholderType} · ${user.city}` : 'Not signed in'}</span>
@@ -176,14 +176,14 @@ export default function Shell({ onOpenPalette, onNewPost, onNewOpp }) {
               </div>
             )}
             <button className="icon-btn" onClick={(e) => { e.stopPropagation(); setNotifOpen(false); setProfileOpen((o) => !o); }} aria-label="Your profile menu" aria-expanded={profileOpen} style={{ overflow: 'hidden', padding: 0, position: 'relative', zIndex: 60 }}>
-              <Avatar name={user?.name || 'G'} size={38} />
+              <Avatar name={user?.name || 'G'} src={user?.avatarUrl} size={38} />
             </button>
             {profileOpen && (
               <>
                 <div onClick={() => setProfileOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 59 }} aria-hidden="true" />
                 <div className="panel-drop" style={{ position: 'absolute', top: 48, right: 0, width: 280, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, boxShadow: 'var(--shadow-pop)', zIndex: 60, overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
                   <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Avatar name={user?.name || 'Guest'} size={40} />
+                    <Avatar name={user?.name || 'Guest'} src={user?.avatarUrl} size={40} />
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: 700, fontSize: 14.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.name || 'Guest'}</div>
                       <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>{user ? `${user.stakeholderType} · ${user.city}` : 'Not signed in'}</div>

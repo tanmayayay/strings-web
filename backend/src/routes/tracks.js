@@ -10,7 +10,7 @@ const TRACK_KINDS = ['TRACK', 'BEAT', 'SAMPLE'];
 const uploaderSelect = {
   id: true,
   name: true,
-  stakeholderType: true,
+  stakeholderType: true, avatarUrl: true,
   city: true,
   verificationStatus: true,
 };

@@ -252,7 +252,7 @@ function VaultViewer({ groups, start, me, onSeen, onClose, onChanged }) {
           ))}
         </div>
         <div className="vv-top">
-          <Avatar name={g.author.name} size={34} />
+          <Avatar name={g.author.name} src={g.author.avatarUrl} size={34} />
           <div className="vv-who">
             <b>{g.author.name}{g.author.verificationStatus === 'VERIFIED' && <Verified size={13} />}</b>
             <span><Lock size={11} /> {timeLeft(story.expiresAt)}</span>

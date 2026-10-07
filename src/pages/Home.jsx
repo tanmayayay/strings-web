@@ -217,7 +217,7 @@ export default function Home() {
 
         <div className="home-composer">
           <div className="home-composer-top">
-            <Avatar name={user?.name || 'Guest'} size={42} />
+            <Avatar name={user?.name || 'Guest'} src={user?.avatarUrl} size={42} />
             <button className="home-composer-input" onClick={() => openPost()}>
               What’s on your stage today, {first}?
             </button>

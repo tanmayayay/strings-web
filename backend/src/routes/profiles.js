@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { auth, optionalAuth } from '../middleware/auth.js';
-import { asyncHandler, bad, notFound, pagination, tooLong, jsonTooBig } from '../lib/http.js';
+import { asyncHandler, bad, notFound, pagination, tooLong, jsonTooBig, isOwnMediaUrl } from '../lib/http.js';
+import { cleanDetail } from '../lib/profileDetail.js';
 
 // Shared field limits for create + edit.
 function checkProfileFields({ name, bio, city, detail }) {
@@ -15,13 +16,76 @@ function checkProfileFields({ name, bio, city, detail }) {
 
 const router = Router();
 
+// ---------------------------------------------------------------- helpers
+// "Today" in India (IST, UTC+5:30) as YYYY-MM-DD — the app launches in India, so
+// availability days and view counts roll over at Indian midnight.
+const IST_MS = 5.5 * 3600 * 1000;
+const dayKey = (ms) => new Date(ms + IST_MS).toISOString().slice(0, 10);
+const todayIST = () => dayKey(Date.now());
+const addDays = (key, n) => new Date(Date.parse(`${key}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const validDay = (v) => typeof v === 'string' && DATE_RE.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`));
+const MAX_AHEAD_DAYS = 120;
+
+// Count a profile view at most once per viewer per 30 minutes (viewer id, else IP).
+// Only a per-day total is stored — no one's identity is kept.
+const recentViews = new Map();
+function recordView(profileId, viewerKey) {
+  const k = `${profileId}:${viewerKey}`;
+  const now = Date.now();
+  const last = recentViews.get(k);
+  if (last && now - last < 30 * 60 * 1000) return;
+  recentViews.set(k, now);
+  if (recentViews.size > 5000) {
+    for (const [key, t] of recentViews) if (now - t > 30 * 60 * 1000) recentViews.delete(key);
+  }
+  prisma.profileViewDay
+    .upsert({
+      where: { profileId_day: { profileId, day: todayIST() } },
+      create: { profileId, day: todayIST(), views: 1 },
+      update: { views: { increment: 1 } },
+    })
+    .catch(() => {});
+}
+
+// The calendar for one profile: free unless the owner marked the day busy or a
+// confirmed booking sits on it. `pending` (owner-only) counts open requests per day.
+async function buildCalendar(userId, fromKey, days, { withPending = false } = {}) {
+  const toKey = addDays(fromKey, days - 1);
+  const [busy, booked, pending] = await Promise.all([
+    prisma.availability.findMany({ where: { userId, date: { gte: fromKey, lte: toKey } }, select: { date: true } }),
+    prisma.booking.findMany({
+      where: { hostId: userId, status: 'CONFIRMED', date: { gte: fromKey, lte: `${toKey}~` } },
+      select: { date: true, timeSlot: true },
+    }),
+    withPending
+      ? prisma.booking.findMany({
+          where: { hostId: userId, status: 'PENDING', date: { gte: fromKey, lte: `${toKey}~` } },
+          select: { date: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const busySet = new Set(busy.map((b) => b.date));
+  const bookedMap = new Map(booked.map((b) => [b.date.slice(0, 10), b.timeSlot || true]));
+  const pendingCount = {};
+  pending.forEach((b) => { const k = b.date.slice(0, 10); pendingCount[k] = (pendingCount[k] || 0) + 1; });
+  return Array.from({ length: days }, (_, i) => {
+    const date = addDays(fromKey, i);
+    const status = bookedMap.has(date) ? 'booked' : busySet.has(date) ? 'busy' : 'free';
+    const out = { date, status };
+    if (status === 'booked' && typeof bookedMap.get(date) === 'string') out.slot = bookedMap.get(date);
+    if (withPending && pendingCount[date]) out.pending = pendingCount[date];
+    return out;
+  });
+}
+
 const STAKEHOLDER_TYPES = ['PERFORMER', 'VENUE', 'BUYER', 'CREW', 'INSTITUTION'];
 const VISIBILITIES = ['PUBLIC', 'CONNECTIONS', 'PRIVATE'];
 const VERIFICATION_STATUSES = ['UNVERIFIED', 'PENDING', 'VERIFIED'];
 
 const publicUser = {
   id: true,
-  stakeholderType: true,
+  stakeholderType: true, avatarUrl: true,
   name: true,
   bio: true,
   city: true,
@@ -84,6 +148,13 @@ router.post(
       return bad(res, 400, `Field "visibility" must be one of: ${VISIBILITIES.join(', ')}`);
     }
 
+    let cleanedDetail;
+    if (detail) {
+      const d = cleanDetail(detail);
+      if (d.error) return bad(res, 400, d.error);
+      cleanedDetail = d.value;
+    }
+
     const user = await prisma.user.create({
       data: {
         name: name.trim(),
@@ -92,8 +163,8 @@ router.post(
         city: city ?? null,
         visibility: visibility ?? 'PUBLIC',
         verificationStatus: 'UNVERIFIED',
-        ...(detail
-          ? { detail: { create: { type: stakeholderType, data: detail } } }
+        ...(cleanedDetail
+          ? { detail: { create: { type: stakeholderType, data: cleanedDetail } } }
           : {}),
       },
       select: publicUser,
@@ -129,12 +200,117 @@ router.get(
       where: { followerId: req.user.id, kind: 'FOLLOW' },
       include: {
         followee: {
-          select: { id: true, name: true, stakeholderType: true, city: true, verificationStatus: true },
+          select: { id: true, name: true, stakeholderType: true, avatarUrl: true, city: true, verificationStatus: true },
         },
       },
       orderBy: { createdAt: 'desc' },
     });
     res.json({ items: rows.map((r) => r.followee) });
+  })
+);
+
+
+// GET /api/profiles/me/analytics?days=14  (auth) — real numbers for the owner's Insights tab.
+router.get(
+  '/me/analytics',
+  auth,
+  asyncHandler(async (req, res) => {
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 14, 7), 90);
+    const me = req.user.id;
+    const today = todayIST();
+    const from = addDays(today, -(days - 1));
+    const prevFrom = addDays(today, -(days * 2 - 1));
+    const weekAgo = new Date(Date.now() - 7 * 86400000);
+
+    const [viewRows, followers, newFollowers, postsCount, likesReceived, commentsReceived, hostGroups, sentCount, topPosts] =
+      await Promise.all([
+        prisma.profileViewDay.findMany({ where: { profileId: me, day: { gte: prevFrom, lte: today } }, select: { day: true, views: true } }),
+        prisma.connection.count({ where: { followeeId: me } }),
+        prisma.connection.count({ where: { followeeId: me, createdAt: { gte: weekAgo } } }),
+        prisma.post.count({ where: { authorId: me } }),
+        prisma.like.count({ where: { post: { authorId: me } } }),
+        prisma.comment.count({ where: { post: { authorId: me } } }),
+        prisma.booking.groupBy({ by: ['status'], where: { hostId: me }, _count: { _all: true } }),
+        prisma.booking.count({ where: { requesterId: me } }),
+        prisma.post.findMany({
+          where: { authorId: me },
+          orderBy: [{ likes: { _count: 'desc' } }, { createdAt: 'desc' }],
+          take: 3,
+          select: { id: true, body: true, mediaUrl: true, createdAt: true, _count: { select: { likes: true, comments: true } } },
+        }),
+      ]);
+
+    const byDay = new Map(viewRows.map((r) => [r.day, r.views]));
+    const series = Array.from({ length: days }, (_, i) => {
+      const day = addDays(from, i);
+      return { day, views: byDay.get(day) || 0 };
+    });
+    const views = series.reduce((a, r) => a + r.views, 0);
+    let prevViews = 0;
+    for (const r of viewRows) if (r.day < from) prevViews += r.views;
+    const hosted = Object.fromEntries(hostGroups.map((g) => [g.status, g._count._all]));
+
+    res.json({
+      days,
+      views,
+      prevViews,
+      series,
+      followers,
+      newFollowers,
+      posts: postsCount,
+      likesReceived,
+      commentsReceived,
+      requests: {
+        pending: hosted.PENDING || 0,
+        confirmed: hosted.CONFIRMED || 0,
+        cancelled: hosted.CANCELLED || 0,
+        sent: sentCount,
+      },
+      topPosts,
+    });
+  })
+);
+
+// PUT /api/profiles/me/availability  (auth) { dates: ["2026-10-20", …], status: "busy" | "free" }
+// The owner marks days busy (or frees them again). Confirmed bookings always win.
+router.put(
+  '/me/availability',
+  auth,
+  asyncHandler(async (req, res) => {
+    const { dates, status } = req.body ?? {};
+    if (!Array.isArray(dates) || dates.length === 0 || dates.length > 62) {
+      return bad(res, 400, 'Field "dates" must be a list of 1–62 days (YYYY-MM-DD).');
+    }
+    if (status !== 'busy' && status !== 'free') return bad(res, 400, 'Field "status" must be "busy" or "free".');
+    const today = todayIST();
+    const last = addDays(today, MAX_AHEAD_DAYS);
+    const clean = [...new Set(dates)];
+    if (!clean.every((d) => validDay(d) && d >= today && d <= last)) {
+      return bad(res, 400, `Dates must be valid days from today up to ${MAX_AHEAD_DAYS} days ahead.`);
+    }
+    if (status === 'busy') {
+      await prisma.availability.createMany({
+        data: clean.map((date) => ({ userId: req.user.id, date, status: 'BUSY' })),
+        skipDuplicates: true,
+      });
+    } else {
+      await prisma.availability.deleteMany({ where: { userId: req.user.id, date: { in: clean } } });
+    }
+    res.json({ ok: true, calendar: await buildCalendar(req.user.id, today, 30, { withPending: true }) });
+  })
+);
+
+// GET /api/profiles/:id/availability?days=30  (public) — free / busy / booked per day.
+// With the owner's token it also carries `pending` request counts.
+router.get(
+  '/:id/availability',
+  optionalAuth,
+  asyncHandler(async (req, res) => {
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 7), 60);
+    const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, visibility: true } });
+    if (!user || (user.visibility === 'PRIVATE' && req.user?.id !== user.id)) return notFound(res, 'Profile');
+    const owner = req.user?.id === user.id;
+    res.json({ today: todayIST(), days: await buildCalendar(user.id, todayIST(), days, { withPending: owner }) });
   })
 );
 
@@ -158,6 +334,7 @@ router.get(
     if (!user) return notFound(res, 'Profile');
     // Private profiles are visible only to their owner.
     if (user.visibility === 'PRIVATE' && req.user?.id !== user.id) return notFound(res, 'Profile');
+    if (req.user?.id !== user.id) recordView(user.id, req.user?.id || req.ip || 'anon');
     res.json(user);
   })
 );
@@ -183,7 +360,7 @@ router.patch(
       return bad(res, 403, 'You can only edit your own profile.');
     }
 
-    const { name, stakeholderType, bio, city, visibility, detail } = req.body ?? {};
+    const { name, stakeholderType, bio, city, visibility, detail, avatarUrl } = req.body ?? {};
     const fieldError = checkProfileFields({ name, bio, city, detail });
     if (fieldError) return bad(res, 400, fieldError);
     const data = {};
@@ -201,11 +378,18 @@ router.patch(
       if (!VISIBILITIES.includes(visibility)) return bad(res, 400, `Invalid visibility.`);
       data.visibility = visibility;
     }
+    if (avatarUrl !== undefined) {
+      if (avatarUrl !== null && !isOwnMediaUrl(avatarUrl)) return bad(res, 400, 'Field "avatarUrl" must be a photo uploaded to Strings.');
+      data.avatarUrl = avatarUrl;
+    }
     if (detail !== undefined) {
+      const d = cleanDetail(detail);
+      if (d.error) return bad(res, 400, d.error);
+      const type = data.stakeholderType || stakeholderType || 'custom';
       data.detail = {
         upsert: {
-          create: { type: 'custom', data: detail },
-          update: { data: detail },
+          create: { type, data: d.value },
+          update: { type, data: d.value },
         },
       };
     }

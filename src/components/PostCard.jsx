@@ -190,7 +190,7 @@ export default function PostCard({ post, onLike, onHide, following, onFollowChan
     <article className="pc">
       <header className="pc-head">
         <button className="pc-avatar" onClick={openProfile} aria-label={`Open ${author.name || 'author'}'s profile`}>
-          <Avatar name={author.name || 'Unknown'} size={40} />
+          <Avatar name={author.name || 'Unknown'} src={author.avatarUrl} size={40} />
         </button>
         <div className="pc-who" onClick={openProfile}>
           <b>{author.name || 'Unknown'}{author.verificationStatus === 'VERIFIED' && <Verified size={14} />}</b>
@@ -300,7 +300,7 @@ export default function PostCard({ post, onLike, onHide, following, onFollowChan
           {comments !== null && comments.length === 0 && <span className="pc-faint">No comments yet — start the conversation.</span>}
           {(comments || []).map((c) => (
             <div key={c.id} className="pc-comment">
-              <Avatar name={c.author?.name || 'Unknown'} size={28} />
+              <Avatar name={c.author?.name || 'Unknown'} src={c.author?.avatarUrl} size={28} />
               <div>
                 <b>
                   {c.author?.name || 'Unknown'}
@@ -312,7 +312,7 @@ export default function PostCard({ post, onLike, onHide, following, onFollowChan
             </div>
           ))}
           <div className="pc-comment-input">
-            <Avatar name={user?.name || 'You'} size={28} />
+            <Avatar name={user?.name || 'You'} src={user?.avatarUrl} size={28} />
             <input
               type="text"
               value={commentDraft}

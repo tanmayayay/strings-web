@@ -84,6 +84,8 @@ model User {
   name               String
   bio                String?
   city               String?
+  // Public URL of the profile photo (Supabase Storage `post-media` bucket).
+  avatarUrl          String?
   visibility         Visibility         @default(PUBLIC)
   verificationStatus VerificationStatus @default(UNVERIFIED)
   createdAt          DateTime           @default(now())
@@ -109,6 +111,7 @@ model User {
   createdGroups           CommunityGroup[]
   groupMemberships        GroupMember[]
   groupMessages           GroupMessage[]
+  busyDays                Availability[]
 
   @@index([stakeholderType])
   @@index([city])
@@ -434,4 +437,27 @@ model GroupMessage {
 enum ApplicationIntent {
   PERFORM
   ATTEND
+}
+
+// ------------------------------------------------- Availability + analytics
+// A day is "free" unless the owner marked it busy here, or a CONFIRMED booking
+// exists for it (shown as "booked"). Only busy days are stored.
+model Availability {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date   String // "YYYY-MM-DD"
+  status String @default("BUSY")
+
+  @@unique([userId, date])
+  @@index([userId])
+}
+
+// One row per profile per day (IST) — a privacy-friendly view counter, no viewer identities.
+model ProfileViewDay {
+  profileId String
+  day       String // "YYYY-MM-DD"
+  views     Int    @default(0)
+
+  @@id([profileId, day])
 }

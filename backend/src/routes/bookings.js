@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { auth } from '../middleware/auth.js';
-import { asyncHandler, bad, notFound, pagination } from '../lib/http.js';
+import { asyncHandler, bad, notFound, pagination, tooLong } from '../lib/http.js';
 
 const router = Router();
 
@@ -10,7 +10,7 @@ const BOOKING_STATUSES = ['PENDING', 'CONFIRMED', 'CANCELLED'];
 const partySelect = {
   id: true,
   name: true,
-  stakeholderType: true,
+  stakeholderType: true, avatarUrl: true,
   city: true,
 };
 
@@ -72,8 +72,21 @@ router.post(
       return bad(res, 400, 'Field "date" is required as an ISO date string (e.g. "2026-10-10").');
     }
 
+    const day = date.slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return bad(res, 400, 'Field "date" must start with YYYY-MM-DD.');
+    if (tooLong(message, 500, 'message') || tooLong(timeSlot, 40, 'timeSlot') || tooLong(budget, 40, 'budget')) {
+      return bad(res, 400, 'Message, time slot or budget is too long.');
+    }
+
     const host = await prisma.user.findUnique({ where: { id: hostId } });
     if (!host) return notFound(res, 'Host profile');
+
+    // Respect the host's live calendar: busy days and confirmed bookings can't be requested.
+    const [busy, taken] = await Promise.all([
+      prisma.availability.findUnique({ where: { userId_date: { userId: hostId, date: day } } }),
+      prisma.booking.findFirst({ where: { hostId, status: 'CONFIRMED', date: { startsWith: day } } }),
+    ]);
+    if (busy || taken) return bad(res, 409, `${host.name.split(' ')[0]} isn't available on that day. Pick another date.`);
 
     const booking = await prisma.booking.create({
       data: {
@@ -86,6 +99,19 @@ router.post(
       },
       include: { requester: { select: partySelect }, host: { select: partySelect } },
     });
+
+    // Tell the host there's a new request waiting (best effort).
+    prisma.notification
+      .create({
+        data: {
+          userId: hostId,
+          type: 'booking',
+          title: 'New booking request',
+          body: `${booking.requester.name} asked to book you for ${day}.`,
+          link: `/profile/${hostId}?tab=requests`,
+        },
+      })
+      .catch(() => {});
 
     res.status(201).json(booking);
   })
@@ -117,6 +143,23 @@ router.patch(
       data: { status },
       include: { requester: { select: partySelect }, host: { select: partySelect } },
     });
+
+    // Let the other side know (best effort).
+    if (status !== booking.status) {
+      const toId = isHost ? updated.requesterId : updated.hostId;
+      const who = isHost ? updated.host.name : updated.requester.name;
+      prisma.notification
+        .create({
+          data: {
+            userId: toId,
+            type: 'booking',
+            title: status === 'CONFIRMED' ? 'Booking confirmed' : 'Booking cancelled',
+            body: `${who} ${status === 'CONFIRMED' ? 'confirmed' : 'cancelled'} the booking for ${updated.date.slice(0, 10)}.`,
+            link: `/profile/${req.user.id}?tab=requests`,
+          },
+        })
+        .catch(() => {});
+    }
 
     res.json(updated);
   })

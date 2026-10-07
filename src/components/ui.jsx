@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { BadgeCheck } from 'lucide-react';
 import { avatarColor, initials } from '../data/demo';
 
@@ -15,18 +16,23 @@ export function Logo({ size = 26, light = false }) {
 }
 
 /* Initials avatar */
-export function Avatar({ name, size = 36, style, gradient }) {
+export function Avatar({ name, size = 36, style, gradient, src }) {
   const fs = Math.round(size * 0.38);
+  const [broken, setBroken] = useState(false);
+  const showImg = !!src && !broken;
   return (
     <div
       className="avatar"
       style={{
         width: size, height: size, fontSize: fs,
         background: gradient || avatarColor(name || '?'),
+        overflow: 'hidden',
         ...style,
       }}
     >
-      {initials(name || '?')}
+      {showImg
+        ? <img src={src} alt="" loading="lazy" onError={() => setBroken(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        : initials(name || '?')}
     </div>
   );
 }

@@ -147,7 +147,7 @@ export default function Messages() {
               const o = c.members.find((m) => m.id !== userId) || c.members[0];
               return (
                 <button key={c.id} className={`msg-list-item${c.id === activeId ? ' active' : ''}`} onClick={() => { setActiveId(c.id); setShowThread(true); }}>
-                  <Avatar name={o?.name || '?'} size={38} />
+                  <Avatar name={o?.name || '?'} src={o?.avatarUrl} size={38} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <b>{o?.name}</b>
                     <p>{c.lastMessage?.body}</p>
@@ -208,7 +208,7 @@ export default function Messages() {
                   style={{ width: '100%', textAlign: 'left' }}
                   onClick={() => openConvo(p)}
                 >
-                  <Avatar name={p.name || '?'} size={38} />
+                  <Avatar name={p.name || '?'} src={p.avatarUrl} size={38} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <b>{p.name}</b>
                     <p>{[p.stakeholderType, p.city].filter(Boolean).join(' · ')}</p>

@@ -9,7 +9,7 @@ const router = Router();
 const TTL_MS = 12 * 3600 * 1000;
 const MAX_ACTIVE_PER_USER = 10;
 
-const authorSelect = { id: true, name: true, stakeholderType: true, city: true, verificationStatus: true };
+const authorSelect = { id: true, name: true, stakeholderType: true, avatarUrl: true, city: true, verificationStatus: true };
 
 // Expired rows are hidden by every query; this also deletes them now and then.
 let lastSweep = 0;

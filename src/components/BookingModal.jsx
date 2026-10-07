@@ -5,6 +5,9 @@ import { Bookings } from '../lib/api';
 import { useStore } from '../store/store';
 import './booking.css';
 
+const pad = (n) => String(n).padStart(2, '0');
+const dayKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
 const SLOTS = ['10 AM–12 PM', '2–4 PM', '6–8 PM', '8–10 PM'];
 const BUDGETS = ['Under ₹15k', '₹15k–30k', '₹30k–60k', '₹60k+'];
 
@@ -23,7 +26,7 @@ export default function BookingModal({ person, day, onClose }) {
     try {
       await Bookings.create({
         hostId: person.id,
-        date: day.toISOString(),
+        date: dayKey(day), // YYYY-MM-DD in the person's own calendar (not UTC)
         timeSlot: slot,
         budget,
         message: message.trim() || undefined,

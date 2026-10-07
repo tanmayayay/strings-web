@@ -11,7 +11,7 @@ const router = Router();
 const memberSelect = {
   id: true,
   name: true,
-  stakeholderType: true,
+  stakeholderType: true, avatarUrl: true,
   city: true,
 };
 

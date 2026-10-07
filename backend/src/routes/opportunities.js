@@ -10,7 +10,7 @@ const OPP_STATUSES = ['OPEN', 'CLOSED'];
 const posterSelect = {
   id: true,
   name: true,
-  stakeholderType: true,
+  stakeholderType: true, avatarUrl: true,
   city: true,
   verificationStatus: true,
 };

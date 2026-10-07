@@ -144,7 +144,14 @@ function qs(params = {}) {
 
 export const Profiles = {
   list: (params = {}) => api(`/api/profiles${qs(params)}`, { auth: false }),
-  get: (id) => api(`/api/profiles/${id}`, { auth: false }),
+  // Sends the token when signed in so owners can open their own private profile.
+  get: (id) => api(`/api/profiles/${id}`, { auth: 'optional' }),
+  /** Live calendar: [{ date: 'YYYY-MM-DD', status: 'free'|'busy'|'booked' }] */
+  availability: (id, days = 30) => api(`/api/profiles/${id}/availability?days=${days}`, { auth: 'optional' }),
+  /** Owner: mark days busy or free again. */
+  setAvailability: (dates, status) => api('/api/profiles/me/availability', { method: 'PUT', body: { dates, status } }),
+  /** Owner: real profile analytics (views, followers, requests, top posts). */
+  analytics: (days = 14) => api(`/api/profiles/me/analytics?days=${days}`, { fresh: true }),
   /** The caller's own profile — auto-provisioned on first sight. */
   me: () => api('/api/profiles/me', { fresh: true }),
   create: (data) => api('/api/profiles', { method: 'POST', body: data }),

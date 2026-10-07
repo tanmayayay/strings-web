@@ -42,7 +42,7 @@ export function MeCard({ user, followingCount, postCount }) {
       <div className="me-cover" />
       <div className="me-body">
         <button className="me-avatar" onClick={() => navigate(`/profile/${user?.id}`)} aria-label="Open your profile">
-          <Avatar name={user?.name || 'You'} size={64} />
+          <Avatar name={user?.name || 'You'} src={user?.avatarUrl} size={64} />
         </button>
         <b className="me-name">{user?.name}{user?.verificationStatus === 'VERIFIED' && <Verified size={14} />}</b>
         <span className="me-sub">{typeLabel(user?.stakeholderType)}{user?.city ? ` · ${user.city}` : ''}</span>
@@ -143,7 +143,7 @@ export function PeopleCard({ people, following, onFollow }) {
       {list.map((p) => (
         <div key={p.id} className="rail-person">
           <button onClick={() => navigate(`/profile/${p.id}`)} className="rail-person-main">
-            <Avatar name={p.name} size={38} />
+            <Avatar name={p.name} src={p.avatarUrl} size={38} />
             <span>
               <b>{p.name}{p.verificationStatus === 'VERIFIED' && <Verified size={12} />}</b>
               <span>{typeLabel(p.stakeholderType)}{p.city ? ` · ${p.city}` : ''}</span>
@@ -268,7 +268,7 @@ export function PeopleStrip({ people, following, onFollow }) {
         {list.map((p) => (
           <div key={p.id} className="person-tile">
             <button className="person-tile-top" onClick={() => navigate(`/profile/${p.id}`)}>
-              <Avatar name={p.name} size={64} />
+              <Avatar name={p.name} src={p.avatarUrl} size={64} />
               <b>{p.name}{p.verificationStatus === 'VERIFIED' && <Verified size={12} />}</b>
               <span>{typeLabel(p.stakeholderType)}{p.city ? ` · ${p.city}` : ''}</span>
             </button>
