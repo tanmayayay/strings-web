@@ -10,13 +10,32 @@ import { timeAgo } from '../lib/format';
 import { useStore } from '../store/store';
 import './news.css';
 
-const MODE_KEY = 'strings.newsMode';
+// v2: older saved choices are ignored so every device starts on its own default.
+const MODE_KEY = 'strings.newsMode.v2';
+
+/** Phones and tablets (touch, no hover) open on the swipe deck; computers on the list. */
+function defaultMode() {
+  try {
+    const touch = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+    return touch || window.innerWidth < 768 ? 'swipe' : 'list';
+  } catch {
+    return 'list';
+  }
+}
 
 export default function News() {
   const { isBookmarked, toggleBookmark, pushToast } = useStore();
-  const [mode, setMode] = useState(() => {
-    try { return localStorage.getItem(MODE_KEY) || 'swipe'; } catch { return 'swipe'; }
+  const [mode, setModeState] = useState(() => {
+    try {
+      const saved = localStorage.getItem(MODE_KEY);
+      return saved === 'swipe' || saved === 'list' ? saved : defaultMode();
+    } catch { return defaultMode(); }
   });
+  // Remember a choice only when the person makes one; otherwise each device uses its default.
+  const setMode = useCallback((m) => {
+    setModeState(m);
+    try { localStorage.setItem(MODE_KEY, m); } catch { /* ignore */ }
+  }, []);
   const [topic, setTopic] = useState('all');
   const [region, setRegion] = useState('all');
   const [reading, setReading] = useState(null);
@@ -27,7 +46,6 @@ export default function News() {
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
 
-  useEffect(() => { try { localStorage.setItem(MODE_KEY, mode); } catch { /* ignore */ } }, [mode]);
 
   useEffect(() => {
     let off = false;
