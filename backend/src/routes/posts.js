@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
-import { auth } from '../middleware/auth.js';
+import { auth, optionalAuth } from '../middleware/auth.js';
 import { asyncHandler, bad, notFound, pagination, isOwnMediaUrl, tooLong } from '../lib/http.js';
 
 const router = Router();
@@ -18,6 +18,7 @@ const authorSelect = {
 // GET /api/posts?authorId=&take=20&skip=0  — newest first
 router.get(
   '/',
+  optionalAuth,
   asyncHandler(async (req, res) => {
     const { take, skip } = pagination(req);
     const where = {};
@@ -37,7 +38,16 @@ router.get(
       prisma.post.count({ where }),
     ]);
 
-    res.json({ items, total, take, skip });
+    // Tell a signed-in caller which of these posts they already liked.
+    let liked = new Set();
+    if (req.user && items.length) {
+      const mine = await prisma.like.findMany({
+        where: { userId: req.user.id, postId: { in: items.map((p) => p.id) } },
+        select: { postId: true },
+      });
+      liked = new Set(mine.map((l) => l.postId));
+    }
+    res.json({ items: items.map((p) => ({ ...p, likedByMe: liked.has(p.id) })), total, take, skip });
   })
 );
 
@@ -77,6 +87,7 @@ router.post(
 // GET /api/posts/:id
 router.get(
   '/:id',
+  optionalAuth,
   asyncHandler(async (req, res) => {
     const post = await prisma.post.findUnique({
       where: { id: req.params.id },
@@ -86,11 +97,15 @@ router.get(
       },
     });
     if (!post) return notFound(res, 'Post');
-    res.json(post);
+    let likedByMe = false;
+    if (req.user) {
+      likedByMe = !!(await prisma.like.findFirst({ where: { postId: post.id, userId: req.user.id }, select: { postId: true } }));
+    }
+    res.json({ ...post, likedByMe });
   })
 );
 
-// POST /api/posts/:id/like  (auth) — idempotent-ish: 409 if already liked
+// POST /api/posts/:id/like  (auth) — idempotent: liking twice is not an error
 router.post(
   '/:id/like',
   auth,
@@ -103,8 +118,9 @@ router.post(
         data: { postId: post.id, userId: req.user.id },
       });
       res.status(201).json({ liked: true, postId: post.id });
-    } catch {
-      return bad(res, 409, 'You already liked this post.');
+    } catch (e) {
+      if (e?.code === 'P2002') return res.json({ liked: true, postId: post.id }); // already liked
+      throw e;
     }
   })
 );
@@ -117,7 +133,6 @@ router.delete(
     const result = await prisma.like.deleteMany({
       where: { postId: req.params.id, userId: req.user.id },
     });
-    if (result.count === 0) return bad(res, 404, 'Like not found.');
     res.json({ liked: false, postId: req.params.id });
   })
 );

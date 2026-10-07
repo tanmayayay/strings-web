@@ -21,7 +21,7 @@ export function prefetchBoot() {
     const quiet = (p) => p.catch(() => {});
     quiet(import('../pages/Home')); // fetch the Home screen's code in parallel with its data
     quiet(api('/api/profiles/me', { fresh: true }));
-    quiet(api('/api/posts?take=40', { auth: false }));
+    quiet(api('/api/posts?take=40', { auth: 'optional' }));
     quiet(api('/api/stories', { auth: false }));
     quiet(api('/api/news/live', { auth: false }));
     quiet(api('/api/profiles?take=24', { auth: false }));
@@ -93,10 +93,11 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (auth) {
     const token = await getAccessToken();
-    if (!token) {
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    } else if (auth !== 'optional') {
       throw Object.assign(new ApiError('Not signed in.', 401, null), { code: 'NO_SESSION' });
     }
-    headers.Authorization = `Bearer ${token}`;
   }
   let res;
   try {
@@ -157,8 +158,8 @@ export const Profiles = {
 };
 
 export const Posts = {
-  list: (params = {}) => api(`/api/posts${qs(params)}`, { auth: false }),
-  get: (id) => api(`/api/posts/${id}`, { auth: false }),
+  list: (params = {}) => api(`/api/posts${qs(params)}`, { auth: 'optional' }),
+  get: (id) => api(`/api/posts/${id}`, { auth: 'optional' }),
   create: ({ body, mediaUrl }) => api('/api/posts', { method: 'POST', body: { body, mediaUrl } }),
   like: (id) => api(`/api/posts/${id}/like`, { method: 'POST' }),
   unlike: (id) => api(`/api/posts/${id}/like`, { method: 'DELETE' }),

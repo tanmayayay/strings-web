@@ -55,7 +55,7 @@ function RichText({ text }) {
 export default function PostCard({ post, onLike, onHide, following, onFollowChange }) {
   const { user, isBookmarked, toggleBookmark, pushToast } = useStore();
   const navigate = useNavigate();
-  const [liked, setLiked] = useState(false);
+  const [liked, setLiked] = useState(!!post.likedByMe);
   const [likeDelta, setLikeDelta] = useState(0);
   const [likeBusy, setLikeBusy] = useState(false);
   const [burst, setBurst] = useState(0);
