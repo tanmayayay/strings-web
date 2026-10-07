@@ -7,6 +7,7 @@ import {
 import { Logo, Avatar } from './ui';
 import { useStore } from '../store/store';
 import { Notifs } from '../lib/api';
+import { useLiveInbox, startLiveInbox, stopLiveInbox, dismissPopup, setMessagePopupsMuted } from '../lib/liveInbox';
 import { timeAgo, resolveNotifLink } from '../lib/format';
 
 const NAV_MAIN = [
@@ -25,7 +26,7 @@ const NAV_MORE = [
   { to: '/support', label: 'Help & Legal', icon: LifeBuoy },
 ];
 
-function NavGroup({ label, items, onNav, unreadCount }) {
+function NavGroup({ label, items, onNav, unreadCount, unreadMessages = 0 }) {
   return (
     <nav className="nav-group">
       {label && <div className="nav-group-label">{label}</div>}
@@ -34,6 +35,7 @@ function NavGroup({ label, items, onNav, unreadCount }) {
           <it.icon size={17} strokeWidth={1.9} />
           {it.label}
           {it.badgeKey === 'notifs' && unreadCount > 0 && <span className="nav-badge">{unreadCount}</span>}
+          {it.to === '/messages' && unreadMessages > 0 && <span className="nav-badge">{unreadMessages > 99 ? '99+' : unreadMessages}</span>}
         </NavLink>
       ))}
     </nav>
@@ -41,7 +43,8 @@ function NavGroup({ label, items, onNav, unreadCount }) {
 }
 
 export default function Shell({ onOpenPalette, onNewPost, onNewOpp }) {
-  const { user, userId, logout, theme, toggleTheme, pushToast } = useStore();
+  const { user, userId, logout, theme, toggleTheme, pushToast, settings } = useStore();
+  const live = useLiveInbox();
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [drawer, setDrawer] = useState(false);
@@ -80,6 +83,27 @@ export default function Shell({ onOpenPalette, onNewPost, onNewOpp }) {
     return () => window.removeEventListener('focus', loadNotifs);
   }, [loadNotifs]);
 
+  // Live inbox: one light poll feeds message badges, pop-ups and the bell.
+  useEffect(() => {
+    if (!userId) return undefined;
+    startLiveInbox(userId);
+    return () => stopLiveInbox();
+  }, [userId]);
+  useEffect(() => { setMessagePopupsMuted(settings?.notifMessages === false); }, [settings?.notifMessages]);
+
+  // New bell notifications arrived: refresh the badge and the dropdown.
+  useEffect(() => {
+    if (live.unreadNotifications !== unreadCount) loadNotifs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live.unreadNotifications]);
+
+  // "(2) Strings" in the browser tab while messages wait.
+  useEffect(() => {
+    const base = document.title.replace(/^\(\d+\+?\)\s*/, '');
+    document.title = live.unreadMessages > 0 ? `(${live.unreadMessages > 99 ? '99+' : live.unreadMessages}) ${base}` : base;
+    return () => { document.title = base; };
+  }, [live.unreadMessages]);
+
   const NAV_YOU = [
     { to: `/profile/${userId}`, label: 'Profile', icon: User },
     { to: '/notifications', label: 'Notifications', icon: Bell, badgeKey: 'notifs' },
@@ -94,7 +118,7 @@ export default function Shell({ onOpenPalette, onNewPost, onNewOpp }) {
       <div className="nav-group-label" style={{ padding: '0 12px 10px', textTransform: 'none', letterSpacing: 0, fontSize: 11 }}>
         Tying the music industry together
       </div>
-      <NavGroup items={NAV_MAIN} onNav={onNav} unreadCount={unreadCount} />
+      <NavGroup items={NAV_MAIN} onNav={onNav} unreadCount={unreadCount} unreadMessages={live.unreadMessages} />
       <NavGroup label="You" items={NAV_YOU} onNav={onNav} unreadCount={unreadCount} />
       <NavGroup label="More" items={NAV_MORE} onNav={onNav} unreadCount={unreadCount} />
       <div className="sidebar-foot">
@@ -213,6 +237,23 @@ export default function Shell({ onOpenPalette, onNewPost, onNewOpp }) {
           </div>
         </main>
 
+        {live.popups.length > 0 && (
+          <div className="msg-popups" aria-live="polite">
+            {live.popups.map((p) => (
+              <div key={p.id} className="msg-popup" role="button" tabIndex={0}
+                onClick={() => { dismissPopup(p.id); navigate(`/messages?c=${p.conversationId}`); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { dismissPopup(p.id); navigate(`/messages?c=${p.conversationId}`); } }}>
+                <Avatar name={p.name} src={p.avatarUrl} size={38} />
+                <div className="msg-popup-text">
+                  <b>{p.name}</b>
+                  <span>{p.body}</span>
+                </div>
+                <button className="msg-popup-x" aria-label="Dismiss" onClick={(e) => { e.stopPropagation(); dismissPopup(p.id); }}><X size={14} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <nav className="bottom-nav">
           {[
             { to: '/home', label: 'Home', icon: Home },
@@ -222,7 +263,10 @@ export default function Shell({ onOpenPalette, onNewPost, onNewOpp }) {
             { to: '/messages', label: 'Messages', icon: MessageCircle },
           ].map((it) => (
             <NavLink key={it.to} to={it.to} className={({ isActive }) => (isActive ? 'active' : '')}>
-              <it.icon size={20} strokeWidth={1.9} />
+              <span className="bn-icon">
+                <it.icon size={20} strokeWidth={1.9} />
+                {it.to === '/messages' && live.unreadMessages > 0 && <span className="bn-badge">{live.unreadMessages > 9 ? '9+' : live.unreadMessages}</span>}
+              </span>
               {it.label}
             </NavLink>
           ))}

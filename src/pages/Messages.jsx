@@ -1,11 +1,25 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Send, MessageCircle, Plus, ChevronLeft } from 'lucide-react';
+import { Send, MessageCircle, Plus, ChevronLeft, Check, CheckCheck, Clock, AlertCircle } from 'lucide-react';
 import { PageHead, Avatar, EmptyState, Modal } from '../components/ui';
 import { useStore } from '../store/store';
 import { Convos, Profiles } from '../lib/api';
+import { onIncoming, setActiveConversation, adjustUnreadMessages } from '../lib/liveInbox';
 
-const POLL_MS = 5000;
+const POLL_MS = 3000;
+
+const clock = (iso) => {
+  try { return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch { return ''; }
+};
+
+/** One tick = sent, two grey = delivered, two blue = read. */
+function Ticks({ m }) {
+  if (m._state === 'sending') return <span className="tick" title="Sending"><Clock size={12} /></span>;
+  if (m._state === 'failed') return <span className="tick failed" title="Not sent"><AlertCircle size={13} /></span>;
+  if (m.readAt) return <span className="tick read" title="Read"><CheckCheck size={16} strokeWidth={2.4} /></span>;
+  if (m.deliveredAt) return <span className="tick" title="Delivered"><CheckCheck size={16} strokeWidth={2.4} /></span>;
+  return <span className="tick" title="Sent"><Check size={14} /></span>;
+}
 
 export default function Messages() {
   const { user, userId, pushToast } = useStore();
@@ -16,6 +30,7 @@ export default function Messages() {
   // Phones show one pane at a time: the list, or the open conversation.
   const [showThread, setShowThread] = useState(false);
   const [thread, setThread] = useState([]);
+  const [pending, setPending] = useState([]); // my messages that are sending or failed
   const [text, setText] = useState('');
   const bodyRef = useRef(null);
   // "New message" modal state.
@@ -70,9 +85,34 @@ export default function Messages() {
       return;
     }
     loadThread(activeId);
-    const t = setInterval(() => loadThread(activeId), POLL_MS);
+    const t = setInterval(() => { if (document.visibilityState === 'visible') loadThread(activeId); }, POLL_MS);
     return () => clearInterval(t);
   }, [activeId, loadThread]);
+
+  // Tell the live inbox which chat is open (no pop-up for it) and react to new arrivals at once.
+  useEffect(() => {
+    setActiveConversation(activeId);
+    return () => setActiveConversation(null);
+  }, [activeId]);
+  useEffect(() => onIncoming((m) => {
+    loadConvos();
+    if (m.conversationId === activeId) loadThread(activeId);
+  }), [activeId, loadConvos, loadThread]);
+
+  // Opening a chat (or a message landing while it is open) marks theirs as read.
+  const markedRef = useRef(new Set());
+  useEffect(() => {
+    if (!activeId || document.visibilityState !== 'visible') return;
+    const unread = thread.filter((m) => m.senderId !== userId && !m.readAt && !markedRef.current.has(m.id));
+    if (!unread.length) return;
+    unread.forEach((m) => markedRef.current.add(m.id));
+    Convos.markRead(activeId)
+      .then(() => {
+        adjustUnreadMessages(-unread.length);
+        setConvos((cs) => cs.map((c) => (c.id === activeId ? { ...c, unread: 0 } : c)));
+      })
+      .catch(() => unread.forEach((m) => markedRef.current.delete(m.id)));
+  }, [thread, activeId, userId]);
 
   // Refetch on window focus.
   useEffect(() => {
@@ -86,7 +126,7 @@ export default function Messages() {
 
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight });
-  }, [thread.length, activeId]);
+  }, [thread.length, pending.length, activeId]);
 
   // Load the follow list when the "New message" modal opens.
   useEffect(() => {
@@ -115,19 +155,32 @@ export default function Messages() {
   const fql = fq.trim().toLowerCase();
   const filteredFollowing = following.filter((p) => !fql || (p.name || '').toLowerCase().includes(fql));
 
-  const send = async () => {
+  const sendBody = async (convoId, body, tmpId) => {
+    try {
+      const msg = await Convos.send(convoId, body);
+      setThread((prev) => (prev.some((x) => x.id === msg.id) ? prev : [...prev, msg]));
+      setPending((p) => p.filter((x) => x.id !== tmpId));
+      loadConvos(); // refresh last-message previews
+    } catch {
+      setPending((p) => p.map((x) => (x.id === tmpId ? { ...x, _state: 'failed' } : x)));
+    }
+  };
+
+  const send = () => {
     const body = text.trim();
     if (!body || !activeId) return;
     setText('');
-    try {
-      const msg = await Convos.send(activeId, body);
-      setThread((prev) => [...prev, msg]);
-      loadConvos(); // refresh last-message previews
-    } catch (e) {
-      pushToast(e.message, 'error');
-      setText(body);
-    }
+    const tmpId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setPending((p) => [...p, { id: tmpId, convoId: activeId, senderId: userId, body, createdAt: new Date().toISOString(), _state: 'sending' }]);
+    sendBody(activeId, body, tmpId);
   };
+
+  const retry = (m) => {
+    setPending((p) => p.map((x) => (x.id === m.id ? { ...x, _state: 'sending' } : x)));
+    sendBody(m.convoId, m.body, m.id);
+  };
+
+  const shown = [...thread, ...pending.filter((m) => m.convoId === activeId)];
 
   return (
     <div>
@@ -150,8 +203,9 @@ export default function Messages() {
                   <Avatar name={o?.name || '?'} src={o?.avatarUrl} size={38} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <b>{o?.name}</b>
-                    <p>{c.lastMessage?.body}</p>
+                    <p className={c.unread > 0 ? 'unread' : ''}>{c.lastMessage?.body}</p>
                   </div>
+                  {c.unread > 0 && c.id !== activeId && <span className="msg-unread">{c.unread > 99 ? '99+' : c.unread}</span>}
                 </button>
               );
             })
@@ -162,13 +216,28 @@ export default function Messages() {
             <>
               <div className="msg-thread-head">
                 <button className="msg-back" onClick={() => setShowThread(false)} aria-label="Back to conversations"><ChevronLeft size={22} /></button>
-                <Avatar name={otherName} size={34} />
+                <Avatar name={otherName} src={other?.avatarUrl} size={34} />
                 <div className="msg-thread-who" onClick={() => other && navigate(`/profile/${other.id}`)}><b>{otherName}</b><div style={{ fontSize: 11.5, color: 'var(--text-faint)' }}>Typically replies within a day</div></div>
               </div>
               <div className="msg-thread-body" ref={bodyRef}>
-                {thread.map((m) => (
-                  <div key={m.id} className={`bubble ${m.senderId === userId ? 'me' : 'them'}`}>{m.body}</div>
-                ))}
+                {shown.map((m) => {
+                  const mine = m.senderId === userId;
+                  return (
+                    <div key={m.id} className={`bubble ${mine ? 'me' : 'them'}${m._state === 'failed' ? ' failed' : ''}`}>
+                      <span className="bubble-text">{m.body}</span>
+                      <span className="bubble-meta">
+                        {m._state === 'failed' ? (
+                          <button className="bubble-retry" onClick={() => retry(m)}>Not sent · Retry</button>
+                        ) : (
+                          <>
+                            {m._state !== 'sending' && clock(m.createdAt)}
+                            {mine && <Ticks m={m} />}
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
               <div className="msg-thread-input">
                 <input type="text" enterKeyHint="send" placeholder={`Message ${otherName.split(' ')[0]}…`} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} />

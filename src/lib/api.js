@@ -202,6 +202,10 @@ export const Convos = {
   open: (userId) => api('/api/conversations', { method: 'POST', body: { userId } }),
   messages: (id, params = {}) => api(`/api/conversations/${id}/messages${qs(params)}`),
   send: (id, body) => api(`/api/conversations/${id}/messages`, { method: 'POST', body: { body } }),
+  /** Light "anything new?" pulse: unread counts + messages that arrived since `since`. */
+  live: (since) => api(`/api/conversations/live${since ? qs({ since }) : ''}`),
+  /** Tell the sender you have seen their messages (turns their ticks blue). */
+  markRead: (id) => api(`/api/conversations/${id}/read`, { method: 'POST', body: {} }),
 };
 
 export const Notifs = {

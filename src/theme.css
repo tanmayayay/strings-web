@@ -750,3 +750,25 @@ img{max-width:100%; display:block;}
 @keyframes pageIn{from{opacity:0}to{opacity:1}}
 .page-loading{display:flex; justify-content:center; padding:60px 0;}
 @media (prefers-reduced-motion:reduce){.page-fade{animation:none;}}
+
+/* ---- live messages: pop-ups, unread, ticks ---- */
+.msg-popups{position:fixed; top:68px; right:20px; z-index:210; display:flex; flex-direction:column; gap:10px; width:min(340px,calc(100vw - 32px));}
+.msg-popup{display:flex; align-items:center; gap:11px; padding:11px 12px; background:var(--panel); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow-pop); cursor:pointer; animation:popIn .22s;}
+.msg-popup:hover{border-color:var(--blue);}
+.msg-popup-text{flex:1; min-width:0; display:flex; flex-direction:column;}
+.msg-popup-text b{font-size:13.5px; color:var(--text);}
+.msg-popup-text span{font-size:12.5px; color:var(--text-soft,var(--text-faint)); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.msg-popup-x{background:none; border:none; color:var(--text-faint); padding:4px; border-radius:6px; cursor:pointer; display:flex;}
+.msg-popup-x:hover{background:var(--border-soft);}
+.msg-unread{background:var(--blue); color:#fff; font-size:10.5px; font-weight:700; min-width:20px; height:20px; padding:0 6px; border-radius:20px; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.msg-list-item p.unread{color:var(--text); font-weight:600;}
+.bubble{display:flex; flex-direction:column;}
+.bubble-meta{align-self:flex-end; display:inline-flex; align-items:center; gap:4px; font-size:10.5px; margin-top:3px; opacity:.75;}
+.bubble.them .bubble-meta{opacity:.55;}
+.bubble .tick{display:inline-flex; color:rgba(255,255,255,.7);}
+.bubble .tick.read{color:#5ef0ff; filter:drop-shadow(0 0 0.5px #00b8d9);}
+.bubble.failed{background:#b4332a; opacity:.9;}
+.bubble-retry{background:none; border:none; color:#fff; font-size:11px; font-weight:700; text-decoration:underline; cursor:pointer; padding:0;}
+.bn-icon{position:relative; display:inline-flex;}
+.bn-badge{position:absolute; top:-5px; right:-9px; background:var(--blue); color:#fff; font-size:9.5px; font-weight:700; min-width:16px; height:16px; padding:0 4px; border-radius:16px; display:flex; align-items:center; justify-content:center; box-shadow:0 0 0 2px var(--bg);}
+@media (max-width:768px){ .msg-popups{top:12px; right:16px; left:16px; width:auto;} }
