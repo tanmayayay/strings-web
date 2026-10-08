@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { PageHead, Avatar } from '../components/ui';
 import { Profiles } from '../lib/api';
 import { useStore } from '../store/store';
+import { InviteBlock, AlertsBlock, BlockedBlock } from '../components/SettingsExtras';
 
 const VISIBILITY = [
   ['public', 'Public — anyone can view and message you', 'PUBLIC'],
@@ -76,9 +77,12 @@ export default function Settings() {
         </div>
       </div>
 
+      <InviteBlock />
+      <AlertsBlock />
+
       <div className="settings-block">
-        <h4>Notifications</h4>
-        {[['notifFollowers', 'New followers'], ['notifMessages', 'Messages'], ['notifMatches', 'Opportunity matches'], ['notifDigest', 'Daily news digest']].map(([k, label]) => (
+        <h4>In-app notifications</h4>
+        {[['notifFollowers', 'New followers'], ['notifMessages', 'Messages'], ['notifMatches', 'Opportunity matches']].map(([k, label]) => (
           <div className="toggle-row" key={k}>
             {label}
             <button className={`switch${settings[k] ? ' on' : ''}`} onClick={() => set(k, !settings[k])} aria-label={label} />
@@ -99,8 +103,10 @@ export default function Settings() {
 
       <div className="settings-block">
         <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><ShieldCheck size={15} style={{ color: 'var(--green)' }} /> Trust & safety</h4>
-        <p style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.6 }}>Verification is manual in this phase — complete your profile and connect at least one linked account, and our team reviews it within a few days. Signed in as <b>{user?.name}</b>.</p>
+        <p style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.6 }}>Verification is manual in this phase. Complete your profile and our team reviews it within a few days. Verified profiles get a badge, and reviews from real bookings build your rating. Report or block anyone from their profile or a chat. Signed in as <b>{user?.name}</b>.</p>
       </div>
+
+      <BlockedBlock />
 
       <div className="settings-block">
         <h4>Account</h4>

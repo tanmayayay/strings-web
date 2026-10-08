@@ -114,13 +114,23 @@ export async function getOrCreateUser(payload) {
 async function loadOrCreateUser(payload) {
   const authId = payload.sub;
   let user = await prisma.user.findUnique({ where: { authId } });
-  if (user) return user;
+  const email = typeof payload.email === 'string' ? payload.email.toLowerCase() : null;
+  if (user) {
+    // Remember the sign-in email so alerts and the weekly digest can reach them.
+    if (email && user.email !== email) {
+      user = await prisma.user.update({ where: { id: user.id }, data: { email } }).catch(() => user);
+    }
+    return user;
+  }
 
   const meta = payload.user_metadata ?? {};
-  const email = typeof payload.email === 'string' ? payload.email : null;
+  // The first 1000 people to join get a Founding Member badge.
+  const founding = (await prisma.user.count()) < 1000;
   user = await prisma.user.create({
     data: {
       authId,
+      email,
+      foundingMember: founding,
       name:
         meta.name ||
         meta.full_name ||

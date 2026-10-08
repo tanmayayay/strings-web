@@ -17,6 +17,11 @@ import tracksRouter from './routes/tracks.js';
 import groupsRouter from './routes/groups.js';
 import newsRouter from './routes/news.js';
 import storiesRouter from './routes/stories.js';
+import accountRouter from './routes/account.js';
+import safetyRouter from './routes/safety.js';
+import reviewsRouter from './routes/reviews.js';
+import pushRouter from './routes/push.js';
+import mailRouter from './routes/mail.js';
 import { isSupabaseMode, isSet } from './middleware/auth.js';
 
 const app = express();
@@ -131,6 +136,11 @@ app.use('/api/tracks', tracksRouter);
 app.use('/api/groups', groupsRouter);
 app.use('/api/news', newsRouter);
 app.use('/api/stories', storiesRouter);
+app.use('/api/account', accountRouter);
+app.use('/api', safetyRouter); // /api/reports, /api/blocks
+app.use('/api/reviews', reviewsRouter);
+app.use('/api/push', pushRouter);
+app.use('/api/email', mailRouter);
 
 // 404 for unknown /api routes.
 app.use('/api', (req, res) => {

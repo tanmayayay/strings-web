@@ -1,0 +1,20 @@
+# Sends the weekly "Your week on Strings" email. Free: runs on GitHub, calls the API.
+# Setup (GitHub repo → Settings → Secrets and variables → Actions):
+#   Secret   CRON_SECRET  = same value as CRON_SECRET on Render
+#   Variable API_URL      = https://strings-web.onrender.com
+name: Weekly digest
+on:
+  schedule:
+    - cron: '30 4 * * 0' # Sundays 10:00 AM IST
+  workflow_dispatch: {}
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the digest endpoint
+        env:
+          API_URL: ${{ vars.API_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          test -n "$API_URL" && test -n "$CRON_SECRET" || { echo "Set API_URL variable and CRON_SECRET secret"; exit 1; }
+          curl --fail-with-body -sS -X POST "$API_URL/api/email/digest" -H "x-cron-secret: $CRON_SECRET" --max-time 280

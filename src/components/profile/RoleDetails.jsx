@@ -1,5 +1,6 @@
 import { Link2, Play, ExternalLink } from 'lucide-react';
 import { sectionsFor, fmtValue, isFilled } from '../../lib/profileSchema';
+import { embedFor } from './Samples';
 
 const safeUrl = (u) => (/^https?:\/\//i.test(u) ? u : null);
 const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
@@ -22,7 +23,7 @@ export default function RoleDetails({ person, onEdit }) {
           <div className="pf-links">
             {filled.map((f) => {
               const url = safeUrl(data[f.key]);
-              if (!url) return null;
+              if (!url || /^sample\d+Url$/.test(f.key) || (f.key === 'featuredUrl' && embedFor(url))) return null; // playable links show inline in Listen
               const feat = f.key === 'featuredUrl';
               return (
                 <a key={f.key} className={`pf-link${feat ? ' feat' : ''}`} href={url} target="_blank" rel="noopener noreferrer">

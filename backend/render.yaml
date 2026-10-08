@@ -8,7 +8,6 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: starter
-    region: singapore
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
@@ -25,3 +24,21 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false # deployed web origin, e.g. https://tanmayayay.github.io/strings-web
+      # --- Optional: email alerts + weekly digest (Resend) ---
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false # e.g. Strings <hello@yourdomain.in> (domain verified in Resend)
+      - key: EMAIL_SECRET
+        sync: false # any long random string; signs unsubscribe links
+      - key: API_PUBLIC_URL
+        sync: false # e.g. https://strings-web.onrender.com
+      - key: CRON_SECRET
+        sync: false # same value as the GitHub secret used by the weekly digest job
+      # --- Optional: browser push notifications (npx web-push generate-vapid-keys) ---
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false # e.g. mailto:you@yourdomain.in

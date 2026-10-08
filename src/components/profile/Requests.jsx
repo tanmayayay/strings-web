@@ -1,4 +1,4 @@
-import { CalendarCheck, Check, X } from 'lucide-react';
+import { CalendarCheck, Check, X, Share2 } from 'lucide-react';
 import { Tag } from '../ui';
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -9,7 +9,7 @@ function parts(date) {
   return { d: d || '–', m: MONTHS[(m || 1) - 1] };
 }
 
-function Row({ b, who, incoming, onStatus, hot }) {
+function Row({ b, who, incoming, onStatus, hot, onShare }) {
   const { d, m } = parts(b.date);
   return (
     <div className={`pf-reqrow${hot ? ' hot' : ''}`}>
@@ -25,14 +25,17 @@ function Row({ b, who, incoming, onStatus, hot }) {
           <button className="btn btn-ghost btn-sm" onClick={() => onStatus(b, 'CANCELLED')}><X size={14} /> {incoming ? 'Decline' : 'Cancel'}</button>
         </div>
       ) : (
-        <Tag color={STATUS_TAG[b.status] || 'gray'}>{b.status === 'CONFIRMED' ? 'Confirmed' : 'Cancelled'}</Tag>
+        <div className="pf-reqbtns">
+          <Tag color={STATUS_TAG[b.status] || 'gray'}>{b.status === 'CONFIRMED' ? 'Confirmed' : 'Cancelled'}</Tag>
+          {b.status === 'CONFIRMED' && incoming && onShare && <button className="btn btn-ghost btn-sm" onClick={() => onShare(b)}><Share2 size={14} /> Share</button>}
+        </div>
       )}
     </div>
   );
 }
 
 /** Everything that needs the owner's reply, then confirmed gigs, then requests they sent. */
-export default function Requests({ received, sent, onStatus, loading }) {
+export default function Requests({ received, sent, onStatus, loading, onShare }) {
   const waiting = received.filter((b) => b.status === 'PENDING');
   const confirmed = received.filter((b) => b.status === 'CONFIRMED');
   const past = received.filter((b) => b.status === 'CANCELLED');
@@ -54,7 +57,7 @@ export default function Requests({ received, sent, onStatus, loading }) {
       {confirmed.length > 0 && (
         <div className="pf-reqgroup">
           <h4><CalendarCheck size={13} /> Confirmed</h4>
-          {confirmed.map((b) => <Row key={b.id} b={b} incoming who={b.requester?.name || 'Someone'} onStatus={onStatus} />)}
+          {confirmed.map((b) => <Row key={b.id} b={b} incoming who={b.requester?.name || 'Someone'} onStatus={onStatus} onShare={onShare} />)}
         </div>
       )}
 

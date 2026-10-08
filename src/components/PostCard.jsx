@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, MessageCircle, Repeat2, Bookmark, Send, Share2, MoreHorizontal, EyeOff, Link2, UserPlus, Check } from 'lucide-react';
+import { Heart, MessageCircle, Repeat2, Bookmark, Send, Share2, MoreHorizontal, Flag, EyeOff, Link2, UserPlus, Check } from 'lucide-react';
 import { Avatar, Verified } from './ui';
 import { useStore } from '../store/store';
 import { Posts, Profiles } from '../lib/api';
+import { ReportModal } from './SafetyMenu';
 import { hashStr } from '../data/demo';
 import './postcard.css';
 
@@ -65,6 +66,7 @@ export default function PostCard({ post, onLike, onHide, following, onFollowChan
   const [commentCount, setCommentCount] = useState(post._count?.comments ?? 0);
   const [expanded, setExpanded] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgFailed, setImgFailed] = useState(false);
   const lastTap = useRef(0);
@@ -212,6 +214,11 @@ export default function PostCard({ post, onLike, onHide, following, onFollowChan
                 <button role="menuitem" onClick={() => { setMenu(false); navigator.clipboard?.writeText(shareLink); pushToast('Profile link copied.'); }}>
                   <Link2 size={15} /> Copy link
                 </button>
+                {!isMine && (
+                  <button role="menuitem" onClick={() => { setMenu(false); setReporting(true); }}>
+                    <Flag size={15} /> Report post
+                  </button>
+                )}
                 {onHide && !isMine && (
                   <button role="menuitem" onClick={() => { setMenu(false); onHide(post.id); }}>
                     <EyeOff size={15} /> Not interested
@@ -327,6 +334,7 @@ export default function PostCard({ post, onLike, onHide, following, onFollowChan
           </div>
         </div>
       )}
+      {reporting && <ReportModal targetType="POST" targetId={post.id} label="this post" onClose={() => setReporting(false)} />}
     </article>
   );
 }

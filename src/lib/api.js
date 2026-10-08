@@ -208,6 +208,32 @@ export const Convos = {
   markRead: (id) => api(`/api/conversations/${id}/read`, { method: 'POST', body: {} }),
 };
 
+export const Account = {
+  prefs: () => api('/api/account/prefs', { fresh: true }),
+  setPrefs: (data) => api('/api/account/prefs', { method: 'PATCH', body: data }),
+  referral: () => api('/api/account/referral', { fresh: true }),
+  claimReferral: (code) => api('/api/account/referral/claim', { method: 'POST', body: { code } }),
+};
+
+export const Safety = {
+  report: ({ targetType, targetId, reason, details }) => api('/api/reports', { method: 'POST', body: { targetType, targetId, reason, details } }),
+  blocks: () => api('/api/blocks', { fresh: true }),
+  block: (userId) => api('/api/blocks', { method: 'POST', body: { userId } }),
+  unblock: (userId) => api(`/api/blocks/${userId}`, { method: 'DELETE' }),
+};
+
+export const Reviews = {
+  forUser: (userId, params = {}) => api(`/api/reviews${qs({ userId, ...params })}`, { auth: false }),
+  pending: () => api('/api/reviews/pending', { fresh: true }),
+  create: ({ bookingId, rating, body }) => api('/api/reviews', { method: 'POST', body: { bookingId, rating, body } }),
+};
+
+export const Push = {
+  key: () => api('/api/push/key', { auth: false }),
+  subscribe: (sub) => api('/api/push/subscribe', { method: 'POST', body: sub }),
+  unsubscribe: (endpoint) => api('/api/push/subscribe', { method: 'DELETE', body: { endpoint } }),
+};
+
 export const Notifs = {
   list: (params = {}) => api(`/api/notifications${qs(params)}`),
   markRead: (ids) => api('/api/notifications/read', { method: 'POST', body: ids ? { ids } : {} }),

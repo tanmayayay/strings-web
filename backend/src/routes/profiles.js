@@ -3,6 +3,8 @@ import { prisma } from '../lib/prisma.js';
 import { auth, optionalAuth } from '../middleware/auth.js';
 import { asyncHandler, bad, notFound, pagination, tooLong, jsonTooBig, isOwnMediaUrl } from '../lib/http.js';
 import { cleanDetail } from '../lib/profileDetail.js';
+import { notify } from '../lib/notify.js';
+import { isBlockedBetween } from '../lib/blocks.js';
 
 // Shared field limits for create + edit.
 function checkProfileFields({ name, bio, city, detail }) {
@@ -91,6 +93,7 @@ const publicUser = {
   city: true,
   visibility: true,
   verificationStatus: true,
+  foundingMember: true,
   createdAt: true,
   detail: true,
 };
@@ -421,6 +424,7 @@ router.post(
       select: { id: true },
     });
     if (!target) return notFound(res, 'Profile');
+    if (await isBlockedBetween(req.user.id, req.params.id)) return bad(res, 403, 'You cannot follow this person.');
     await prisma.connection.upsert({
       where: {
         followerId_followeeId: { followerId: req.user.id, followeeId: req.params.id },
@@ -429,17 +433,13 @@ router.post(
       update: { status: 'ACCEPTED' },
     });
     const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { name: true } });
-    await prisma.notification
-      .create({
-        data: {
-          userId: req.params.id,
-          type: 'follow',
-          title: 'New follower',
-          body: `${me?.name ?? 'Someone'} started following you.`,
-          link: `/profile/${req.user.id}`,
-        },
-      })
-      .catch(() => {});
+    notify(req.params.id, {
+      type: 'follow',
+      title: 'New follower',
+      body: `${me?.name ?? 'Someone'} started following you.`,
+      link: `/profile/${req.user.id}`,
+      from: req.user.id,
+    });
     res.status(201).json({ ok: true });
   })
 );

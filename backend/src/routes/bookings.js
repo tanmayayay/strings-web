@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { auth } from '../middleware/auth.js';
 import { asyncHandler, bad, notFound, pagination, tooLong } from '../lib/http.js';
+import { notify } from '../lib/notify.js';
+import { isBlockedBetween } from '../lib/blocks.js';
 
 const router = Router();
 
@@ -80,6 +82,7 @@ router.post(
 
     const host = await prisma.user.findUnique({ where: { id: hostId } });
     if (!host) return notFound(res, 'Host profile');
+    if (await isBlockedBetween(req.user.id, hostId)) return bad(res, 403, 'You cannot send a request to this person.');
 
     // Respect the host's live calendar: busy days and confirmed bookings can't be requested.
     const [busy, taken] = await Promise.all([
@@ -100,18 +103,15 @@ router.post(
       include: { requester: { select: partySelect }, host: { select: partySelect } },
     });
 
-    // Tell the host there's a new request waiting (best effort).
-    prisma.notification
-      .create({
-        data: {
-          userId: hostId,
-          type: 'booking',
-          title: 'New booking request',
-          body: `${booking.requester.name} asked to book you for ${day}.`,
-          link: `/profile/${hostId}?tab=requests`,
-        },
-      })
-      .catch(() => {});
+    // Tell the host there's a new request waiting (bell + push + email, best effort).
+    notify(hostId, {
+      type: 'booking',
+      title: 'New booking request',
+      body: `${booking.requester.name} asked to book you for ${day}.`,
+      link: `/profile/${hostId}?tab=requests`,
+      from: req.user.id,
+      email: { subject: `${booking.requester.name} wants to book you on ${day}`, cta: 'Review the request' },
+    });
 
     res.status(201).json(booking);
   })
@@ -148,17 +148,14 @@ router.patch(
     if (status !== booking.status) {
       const toId = isHost ? updated.requesterId : updated.hostId;
       const who = isHost ? updated.host.name : updated.requester.name;
-      prisma.notification
-        .create({
-          data: {
-            userId: toId,
-            type: 'booking',
-            title: status === 'CONFIRMED' ? 'Booking confirmed' : 'Booking cancelled',
-            body: `${who} ${status === 'CONFIRMED' ? 'confirmed' : 'cancelled'} the booking for ${updated.date.slice(0, 10)}.`,
-            link: `/profile/${req.user.id}?tab=requests`,
-          },
-        })
-        .catch(() => {});
+      notify(toId, {
+        type: 'booking',
+        title: status === 'CONFIRMED' ? 'Booking confirmed' : 'Booking cancelled',
+        body: `${who} ${status === 'CONFIRMED' ? 'confirmed' : 'cancelled'} the booking for ${updated.date.slice(0, 10)}.`,
+        link: `/profile/${req.user.id}?tab=requests`,
+        from: req.user.id,
+        email: { subject: status === 'CONFIRMED' ? `${who} confirmed your booking` : `${who} cancelled the booking`, cta: 'Open booking' },
+      });
     }
 
     res.json(updated);

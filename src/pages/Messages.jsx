@@ -4,6 +4,7 @@ import { Send, MessageCircle, Plus, ChevronLeft, Check, CheckCheck, Clock, Alert
 import { PageHead, Avatar, EmptyState, Modal } from '../components/ui';
 import { useStore } from '../store/store';
 import { Convos, Profiles } from '../lib/api';
+import SafetyMenu from '../components/SafetyMenu';
 import { onIncoming, setActiveConversation, adjustUnreadMessages } from '../lib/liveInbox';
 
 const POLL_MS = 3000;
@@ -218,6 +219,7 @@ export default function Messages() {
                 <button className="msg-back" onClick={() => setShowThread(false)} aria-label="Back to conversations"><ChevronLeft size={22} /></button>
                 <Avatar name={otherName} src={other?.avatarUrl} size={34} />
                 <div className="msg-thread-who" onClick={() => other && navigate(`/profile/${other.id}`)}><b>{otherName}</b><div style={{ fontSize: 11.5, color: 'var(--text-faint)' }}>Typically replies within a day</div></div>
+                {other && other.id !== userId && <div style={{ marginLeft: 'auto' }}><SafetyMenu person={other} onBlockChange={(b) => { if (b) { setShowThread(false); loadConvos(); } }} /></div>}
               </div>
               <div className="msg-thread-body" ref={bodyRef}>
                 {shown.map((m) => {

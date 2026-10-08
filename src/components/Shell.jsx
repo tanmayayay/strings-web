@@ -6,7 +6,8 @@ import {
 } from 'lucide-react';
 import { Logo, Avatar } from './ui';
 import { useStore } from '../store/store';
-import { Notifs } from '../lib/api';
+import { Notifs, Account } from '../lib/api';
+import { pendingRef, clearRef } from '../lib/ref';
 import { useLiveInbox, startLiveInbox, stopLiveInbox, dismissPopup, setMessagePopupsMuted } from '../lib/liveInbox';
 import { timeAgo, resolveNotifLink } from '../lib/format';
 
@@ -88,6 +89,12 @@ export default function Shell({ onOpenPalette, onNewPost, onNewOpp }) {
     if (!userId) return undefined;
     startLiveInbox(userId);
     return () => stopLiveInbox();
+  }, [userId]);
+  // Joined through someone's invite link? Credit them once.
+  useEffect(() => {
+    const code = pendingRef();
+    if (!userId || !code) return;
+    Account.claimReferral(code).catch(() => {}).finally(clearRef);
   }, [userId]);
   useEffect(() => { setMessagePopupsMuted(settings?.notifMessages === false); }, [settings?.notifMessages]);
 

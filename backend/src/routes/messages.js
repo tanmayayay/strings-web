@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { auth } from '../middleware/auth.js';
 import { asyncHandler, bad, notFound, pagination } from '../lib/http.js';
+import { isBlockedBetween } from '../lib/blocks.js';
+import { pushTo } from '../lib/push.js';
 
 const router = Router();
 
@@ -75,6 +77,7 @@ router.post(
     }
     const other = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
     if (!other) return notFound(res, 'User');
+    if (await isBlockedBetween(req.user.id, userId)) return bad(res, 403, 'You cannot message this person.');
 
     const candidates = await prisma.conversation.findMany({
       where: { members: { every: { userId: { in: [req.user.id, userId] } } } },
@@ -186,6 +189,13 @@ router.post(
     if (body.length > 2000) {
       return bad(res, 400, 'Message is too long (max 2000 characters).');
     }
+    const others = await prisma.conversationMember.findMany({
+      where: { conversationId: req.params.id, userId: { not: req.user.id } },
+      select: { userId: true },
+    });
+    for (const o of others) {
+      if (await isBlockedBetween(req.user.id, o.userId)) return bad(res, 403, 'You cannot message this person.');
+    }
     const msg = await prisma.message.create({
       data: { conversationId: req.params.id, senderId: req.user.id, body: body.trim() },
       include: { sender: { select: memberSelect } },
@@ -196,6 +206,10 @@ router.post(
       data: { updatedAt: new Date() },
     });
     // Chat messages are announced by the live inbox (pop-up + unread badges), not as bell notifications.
+    // Browsers that enabled push also get a system notification (the service worker skips it if Strings is open and focused).
+    for (const o of others) {
+      pushTo(o.userId, { title: msg.sender.name, body: msg.body, url: `#/messages?c=${req.params.id}`, tag: `msg-${req.params.id}` });
+    }
     res.status(201).json(msg);
   })
 );

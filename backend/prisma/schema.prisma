@@ -88,6 +88,15 @@ model User {
   avatarUrl          String?
   visibility         Visibility         @default(PUBLIC)
   verificationStatus VerificationStatus @default(UNVERIFIED)
+  // Growth: personal invite code, who invited this person, early-member badge.
+  referralCode       String?            @unique
+  referredById       String?
+  foundingMember     Boolean            @default(false)
+  // Contact + preferences for email / push alerts.
+  email              String?
+  emailAlerts        Boolean            @default(true)
+  weeklyDigest       Boolean            @default(true)
+  lastDigestAt       DateTime?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -112,6 +121,12 @@ model User {
   groupMemberships        GroupMember[]
   groupMessages           GroupMessage[]
   busyDays                Availability[]
+  reportsMade             Report[]             @relation("Reporter")
+  blocksMade              Block[]              @relation("Blocker")
+  blockedBy               Block[]              @relation("Blocked")
+  reviewsWritten          Review[]             @relation("Reviewer")
+  reviewsReceived         Review[]             @relation("Reviewee")
+  pushSubscriptions       PushSubscription[]
 
   @@index([stakeholderType])
   @@index([city])
@@ -463,4 +478,63 @@ model ProfileViewDay {
   views     Int    @default(0)
 
   @@id([profileId, day])
+}
+
+
+// ------------------------------------------------------- Trust & safety
+// A report about a person, post or message. Reviewed by the Strings team.
+model Report {
+  id         String   @id @default(cuid())
+  reporterId String
+  reporter   User     @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  targetType String // USER | POST | MESSAGE | OPPORTUNITY
+  targetId   String
+  reason     String
+  details    String?
+  status     String   @default("OPEN") // OPEN | REVIEWED | ACTIONED | DISMISSED
+  createdAt  DateTime @default(now())
+
+  @@index([status])
+  @@index([targetType, targetId])
+}
+
+// One person blocking another: no messages, booking requests or follows either way.
+model Block {
+  blockerId String
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId String
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([blockerId, blockedId])
+  @@index([blockedId])
+}
+
+// A review for a confirmed booking, written by either side about the other.
+model Review {
+  id         String   @id @default(cuid())
+  bookingId  String
+  reviewerId String
+  reviewer   User     @relation("Reviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  revieweeId String
+  reviewee   User     @relation("Reviewee", fields: [revieweeId], references: [id], onDelete: Cascade)
+  rating     Int // 1..5
+  body       String?
+  createdAt  DateTime @default(now())
+
+  @@unique([bookingId, reviewerId])
+  @@index([revieweeId, createdAt])
+}
+
+// ---------------------------------------------------------- Web push
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }

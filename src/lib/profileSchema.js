@@ -95,7 +95,10 @@ export const ROLE_SECTIONS = {
       title: 'Links',
       links: true,
       fields: [
-        link('featuredUrl', 'Featured track or video', 'https://youtube.com/…'),
+        link('featuredUrl', 'Featured track or video', 'https://youtube.com/… or Spotify / SoundCloud'),
+        link('sample1Url', 'Sample 2 (plays on your profile)', 'YouTube, Spotify or SoundCloud link'),
+        link('sample2Url', 'Sample 3', 'YouTube, Spotify or SoundCloud link'),
+        link('sample3Url', 'Sample 4', 'YouTube, Spotify or SoundCloud link'),
         link('spotifyUrl', 'Spotify', 'https://open.spotify.com/artist/…'),
         link('youtubeUrl', 'YouTube', 'https://youtube.com/@…'),
         link('instagramUrl', 'Instagram', 'https://instagram.com/…'),
